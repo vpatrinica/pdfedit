@@ -15,7 +15,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("BlazorPolicy", policy =>
     {
-        policy.WithOrigins("https://localhost:5001", "http://localhost:5000")
+        policy.WithOrigins("https://localhost:7000", "http://localhost:5104", "https://localhost:7127", "http://localhost:5148")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -35,8 +35,14 @@ app.UseHttpsRedirection();
 
 app.UseCors("BlazorPolicy");
 
+// Serve static files (for Blazor WASM)
+app.UseStaticFiles();
+
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Fallback to serve Blazor WASM app for client-side routing
+app.MapFallbackToFile("index.html");
 
 app.Run();
