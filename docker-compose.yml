@@ -14,18 +14,6 @@ services:
     networks:
       - pdfedit-network
 
-  pdf-client:
-    build:
-      context: .
-      dockerfile: src/PdfEdit.Client/Dockerfile
-    container_name: pdfedit-client
-    ports:
-      - "80:80"
-    depends_on:
-      - pdf-api
-    networks:
-      - pdfedit-network
-
 networks:
   pdfedit-network:
     driver: bridge
