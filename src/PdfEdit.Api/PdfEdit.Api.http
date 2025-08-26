@@ -1,6 +1,0 @@
-@PdfEdit.Api_HostAddress = http://localhost:5148
-
-GET {{PdfEdit.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
