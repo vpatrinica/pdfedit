@@ -5,10 +5,10 @@ services:
       dockerfile: src/PdfEdit.Api/Dockerfile
     container_name: pdfedit
     ports:
-      - "8080:80"  # <-- Changed this line
-      - "8443:443" # <-- Also changed this for https, just in case
+      - "8080:80"
+      - "8443:443"
     environment:
-      ASPNETCORE_ENVIRONMENT: Development  # <-- Add this line
+      ASPNETCORE_ENVIRONMENT: Development
     networks:
       - pdfedit-network
 
