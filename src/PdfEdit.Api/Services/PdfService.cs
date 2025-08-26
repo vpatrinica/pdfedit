@@ -1,6 +1,6 @@
 using iText.Forms;
 using iText.Kernel.Pdf;
-using PdfEdit.Shared;
+using PdfEdit.Shared.Models;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading.Tasks;

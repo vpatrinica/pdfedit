@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PdfEdit.Api.Services;
-using PdfEdit.Shared;
+using PdfEdit.Shared.Models;
 using System;
 using System.IO;
 using System.Threading.Tasks;
