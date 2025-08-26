@@ -10,30 +10,35 @@ using iText.Kernel.Font;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
+using Microsoft.Extensions.Logging;
+using iText.Forms.Fields;
 
 namespace PdfEdit.Api.Services;
 
 public class PdfService : IPdfService
 {
-    // A simple in-memory store for temporary file paths
-    private static readonly ConcurrentDictionary<string, string> DocumentPaths = new();
+    private readonly ILogger<PdfService> _logger;
+    private static readonly ConcurrentDictionary<string, byte[]> _documents = new();
 
-    public async Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream)
+    public PdfService(ILogger<PdfService> logger)
+    {
+        _logger = logger;
+    }
+
+    public async Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream, string fileName)
     {
         var documentId = Guid.NewGuid().ToString();
         
-        // Read the PDF stream into memory
         using var memoryStream = new MemoryStream();
         await pdfStream.CopyToAsync(memoryStream);
         var pdfBytes = memoryStream.ToArray();
         
-        // Store the original PDF
         _documents[documentId] = pdfBytes;
 
-        // Analyze the PDF to extract form fields
         var response = new PdfUploadResponse
         {
-            Id = documentId
+            Id = documentId,
+            FileName = fileName
         };
 
         using var reader = new PdfReader(new MemoryStream(pdfBytes));
@@ -41,8 +46,7 @@ public class PdfService : IPdfService
         
         response.PageCount = pdfDoc.GetNumberOfPages();
         
-        // Extract existing form fields
-        var form = PdfFormCreator.GetAcroForm(pdfDoc, false);
+        var form = PdfAcroForm.GetAcroForm(pdfDoc, false);
         if (form != null)
         {
             var fields = form.GetAllFormFields();
@@ -61,7 +65,7 @@ public class PdfService : IPdfService
 
     public async Task<byte[]> ProcessPdfAsync(PdfEditRequest request)
     {
-        if (!DocumentPaths.TryGetValue(request.DocumentId, out var filePath))
+        if (!_documents.TryGetValue(request.DocumentId, out var originalPdf))
         {
             throw new FileNotFoundException("Document not found or expired.", request.DocumentId);
         }
@@ -74,36 +78,33 @@ public class PdfService : IPdfService
         using var pdfDoc = new PdfDocument(reader, writer);
         using var document = new Document(pdfDoc);
 
-        // Update existing form fields
-        var form = PdfFormCreator.GetAcroForm(pdfDoc, true);
+        var form = PdfAcroForm.GetAcroForm(pdfDoc, true);
         if (form != null)
         {
             foreach (var field in request.FormFields)
             {
-                var pdfField = form.GetField(field.Name);
-                if (pdfField != null)
+                if (form.GetField(field.Name) is PdfFormField pdfField)
                 {
                     pdfField.SetValue(field.Value);
                 }
             }
             
-            // Flatten the form to make it non-editable
             form.FlattenFields();
         }
 
-        // Add new text elements
         foreach (var textElement in request.TextElements)
         {
             AddTextElement(document, pdfDoc, textElement);
         }
 
-        // Add new image elements (signatures)
         foreach (var imageElement in request.ImageElements)
         {
             AddImageElement(document, pdfDoc, imageElement);
         }
 
         document.Close();
+
+        await Task.CompletedTask;
         return outputStream.ToArray();
     }
 
@@ -136,7 +137,7 @@ public class PdfService : IPdfService
         }
     }
 
-    private PdfEdit.Shared.Models.Rectangle GetFieldBounds(iText.Forms.Fields.PdfFormField field)
+    private Rectangle GetFieldBounds(iText.Forms.Fields.PdfFormField field)
     {
         try
         {
@@ -146,7 +147,7 @@ public class PdfService : IPdfService
                 var rectArray = widgets[0].GetRectangle();
                 if (rectArray != null && rectArray.Size() >= 4)
                 {
-                    return new PdfEdit.Shared.Models.Rectangle
+                    return new Rectangle
                     {
                         X = rectArray.GetAsNumber(0)?.DoubleValue() ?? 0,
                         Y = rectArray.GetAsNumber(1)?.DoubleValue() ?? 0,
@@ -158,7 +159,7 @@ public class PdfService : IPdfService
         }
         catch { }
         
-        return new PdfEdit.Shared.Models.Rectangle();
+        return new Rectangle();
     }
 
     private PdfFieldType GetFieldType(iText.Forms.Fields.PdfFormField field)
@@ -167,7 +168,7 @@ public class PdfService : IPdfService
         if (fieldType.Equals(PdfName.Tx))
             return PdfFieldType.Text;
         else if (fieldType.Equals(PdfName.Btn))
-            return PdfFieldType.Checkbox; // Simplified - treat all buttons as checkboxes for now
+            return PdfFieldType.Checkbox;
         else if (fieldType.Equals(PdfName.Ch))
             return PdfFieldType.ComboBox;
         else if (fieldType.Equals(PdfName.Sig))
@@ -201,7 +202,6 @@ public class PdfService : IPdfService
         {
             var page = pdfDoc.GetPage(textElement.PageNumber);
             
-            // Create text with specified properties
             var text = new Paragraph(textElement.Text)
                 .SetFontSize(textElement.FontSize)
                 .SetFixedPosition(textElement.PageNumber, 
@@ -221,12 +221,10 @@ public class PdfService : IPdfService
     {
         try
         {
-            // Decode base64 image
             var imageBytes = Convert.FromBase64String(imageElement.ImageData);
             var imageData = ImageDataFactory.Create(imageBytes);
             var image = new Image(imageData);
 
-            // Position and size the image
             image.SetFixedPosition(imageElement.PageNumber,
                                  (float)imageElement.Bounds.X,
                                  (float)imageElement.Bounds.Y);

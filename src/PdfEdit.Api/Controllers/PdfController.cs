@@ -41,7 +41,7 @@ public class PdfController : ControllerBase
             }
 
             using var stream = file.OpenReadStream();
-            var response = await _pdfService.UploadPdfAsync(stream, file.FileName);
+            var response = await _pdfService.ExtractFormFieldsAsync(stream, file.FileName);
 
             return Ok(response);
         }

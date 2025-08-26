@@ -6,7 +6,7 @@ namespace PdfEdit.Api.Services;
 
 public interface IPdfService
 {
-    Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream);
+    Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream, string fileName);
     Task<byte[]> ProcessPdfAsync(PdfEditRequest request);
     void CleanupDocument(string documentId);
 }
