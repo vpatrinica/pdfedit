@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  pdf-api:
+    build:
+      context: .
+      dockerfile: src/PdfEdit.Api/Dockerfile
+    container_name: pdfedit-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - pdfedit-network
+
+  pdf-client:
+    build:
+      context: .
+      dockerfile: src/PdfEdit.Client/Dockerfile
+    container_name: pdfedit-client
+    ports:
+      - "80:80"
+    depends_on:
+      - pdf-api
+    networks:
+      - pdfedit-network
+
+networks:
+  pdfedit-network:
+    driver: bridge
+
+volumes:
+  pdf-data:
