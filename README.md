@@ -14,11 +14,26 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 - **Backend**: ASP.NET Core Web API (.NET 8) with iText7 for PDF processing
 - **Frontend**: Blazor WebAssembly with Bootstrap UI
-- **Containerization**: Docker and Docker Compose for easy deployment
+- **Containerization**: Podman and Docker support for easy deployment
 
 ## Quick Start
 
-### Using Docker Compose (Recommended)
+### Using Podman (Recommended)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/vpatrinica/pdfedit.git
+   cd pdfedit
+   ```
+
+2. Run with Podman:
+   ```bash
+   ./scripts/start-podman.sh
+   ```
+
+3. Open your browser and navigate to `http://localhost`
+
+### Using Docker Compose
 
 1. Clone the repository:
    ```bash
@@ -28,6 +43,8 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 2. Run with Docker Compose:
    ```bash
+   ./scripts/start-docker.sh
+   # OR manually:
    docker-compose up --build
    ```
 
@@ -37,7 +54,7 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 #### Prerequisites
 - .NET 8.0 SDK
-- Docker (optional, for containerized deployment)
+- Podman (recommended) or Docker (optional, for containerized deployment)
 
 #### Running Locally
 
@@ -91,8 +108,113 @@ pdfedit/
 │   │   ├── Dockerfile        # Client container configuration
 │   │   └── nginx.conf        # Nginx configuration for serving
 │   └── PdfEdit.Shared/       # Shared models and DTOs
-├── docker-compose.yml        # Container orchestration
+├── scripts/
+│   ├── start-podman.sh       # Start with Podman (recommended)
+│   ├── stop-podman.sh        # Stop Podman containers
+│   ├── start-docker.sh       # Start with Docker Compose
+│   ├── stop-docker.sh        # Stop Docker containers
+│   └── validate.sh           # Validate container configurations
+├── docker-compose.yml        # Docker Compose configuration
+├── podman-compose.yml        # Podman Compose configuration
 └── README.md
+```
+
+## Container Deployment Options
+
+### Podman (Recommended)
+
+Podman is a daemonless container engine that's more secure and doesn't require root privileges. 
+
+**Why Podman?**
+- Rootless containers by default (better security)
+- No daemon required (lower resource usage)
+- Docker-compatible API
+- Better integration with systemd
+- Supports Kubernetes YAML files
+
+**Quick start:**
+```bash
+./scripts/start-podman.sh
+```
+
+**Stop the application:**
+```bash
+./scripts/stop-podman.sh
+```
+
+**Manual commands:**
+```bash
+# Using podman-compose (if installed)
+podman-compose -f podman-compose.yml up --build
+
+# Using podman compose (built-in)
+podman compose -f podman-compose.yml up --build
+```
+
+### Docker Compose
+
+Traditional Docker Compose is also supported for teams already using Docker.
+
+**Quick start:**
+```bash
+./scripts/start-docker.sh
+```
+
+**Stop the application:**
+```bash
+./scripts/stop-docker.sh
+```
+
+**Manual commands:**
+```bash
+# Using docker-compose
+docker-compose up --build
+
+# Using docker compose (newer)
+docker compose up --build
+```
+
+## Troubleshooting
+
+### Container Build Issues
+
+**Issue**: Container builds fail with network connectivity errors in restricted environments.
+
+**Solution**: This is a known limitation in containerized CI/CD environments or networks with restricted internet access. Use the development setup instead:
+
+```bash
+# Development setup (no containers)
+dotnet restore
+cd src/PdfEdit.Api && dotnet run &
+cd src/PdfEdit.Client && dotnet run
+```
+
+### Podman Warnings
+
+**Issue**: Warnings about systemd and cgroup manager.
+
+**Solution**: These warnings are normal in containerized environments and don't affect functionality. For production use, consider:
+```bash
+# Enable lingering (if you have root access)
+loginctl enable-linger $(id -u)
+```
+
+### Port Conflicts
+
+**Issue**: Port 80 or 8080 already in use.
+
+**Solution**: Modify the port mappings in the compose files:
+```yaml
+ports:
+  - "8081:80"    # Change host port
+  - "8082:8080"  # Change host port
+```
+
+### Container Validation
+
+Use the validation script to check your setup:
+```bash
+./scripts/validate.sh
 ```
 
 ## API Endpoints
