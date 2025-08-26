@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using PdfEdit.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseHttpsRedirection();
 
