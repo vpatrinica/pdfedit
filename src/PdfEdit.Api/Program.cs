@@ -7,7 +7,6 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register PDF service
 builder.Services.AddScoped<IPdfService, PdfService>();
 
 // Configure CORS for Blazor client
@@ -35,14 +34,16 @@ app.UseHttpsRedirection();
 
 app.UseCors("BlazorPolicy");
 
-// Serve static files (for Blazor WASM)
-app.UseStaticFiles();
-
 app.UseAuthorization();
+
+// Serve Blazor WASM files
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 
 app.MapControllers();
 
-// Fallback to serve Blazor WASM app for client-side routing
+// Fallback to Blazor's index.html for client-side routing
 app.MapFallbackToFile("index.html");
 
+app.Run();
 app.Run();

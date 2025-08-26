@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using PdfEdit.Api.Services;
-using PdfEdit.Shared.Models;
+using PdfEdit.Shared;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace PdfEdit.Api.Controllers;
 
@@ -18,7 +21,7 @@ public class PdfController : ControllerBase
     }
 
     [HttpPost("upload")]
-    public async Task<ActionResult<PdfUploadResponse>> UploadPdf(IFormFile file)
+    public async Task<IActionResult> Upload(IFormFile file)
     {
         try
         {
@@ -50,7 +53,7 @@ public class PdfController : ControllerBase
     }
 
     [HttpPost("process")]
-    public async Task<ActionResult> ProcessPdf([FromBody] PdfEditRequest request)
+    public async Task<IActionResult> ProcessPdf([FromBody] PdfEditRequest request)
     {
         try
         {

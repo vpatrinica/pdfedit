@@ -1,31 +1,30 @@
-# Use the official .NET 8 SDK image for building
+# Stage 1: Build Environment
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy project files
-COPY ["src/PdfEdit.Api/PdfEdit.Api.csproj", "src/PdfEdit.Api/"]
-COPY ["src/PdfEdit.Shared/PdfEdit.Shared.csproj", "src/PdfEdit.Shared/"]
+# Copy solution and project files first to leverage Docker layer caching
+COPY PdfEdit.sln .
+COPY src/PdfEdit.Api/PdfEdit.Api.csproj src/PdfEdit.Api/
+COPY src/PdfEdit.Client/PdfEdit.Client.csproj src/PdfEdit.Client/
+COPY src/PdfEdit.Shared/PdfEdit.Shared.csproj src/PdfEdit.Shared/
 
 # Restore dependencies
-RUN dotnet restore "src/PdfEdit.Api/PdfEdit.Api.csproj"
+RUN dotnet restore "PdfEdit.sln"
 
-# Copy all source code
+# Copy the rest of the source code
 COPY . .
 
-# Build and publish
+# Publish the application
 WORKDIR "/src/src/PdfEdit.Api"
-RUN dotnet build "PdfEdit.Api.csproj" -c Release -o /app/build
 RUN dotnet publish "PdfEdit.Api.csproj" -c Release -o /app/publish
 
-# Use the official .NET 8 runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+# Stage 2: Final Runtime Image
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
-
-# Copy published app
 COPY --from=build /app/publish .
 
-# Expose port
-EXPOSE 8080
+# Expose port 80 for the combined app
+EXPOSE 80
+ENV ASPNETCORE_URLS=http://+:80
 
-# Start the application
 ENTRYPOINT ["dotnet", "PdfEdit.Api.dll"]

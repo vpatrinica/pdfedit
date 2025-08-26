@@ -1,138 +1,110 @@
 using iText.Forms;
-using iText.Forms.Fields;
 using iText.Kernel.Pdf;
-using iText.Kernel.Pdf.Canvas;
-using iText.Kernel.Geom;
+using PdfEdit.Shared;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Threading.Tasks;
+using iText.IO.Image;
+using iText.Kernel.Colors;
+using iText.Kernel.Font;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
-using iText.IO.Image;
-using PdfEdit.Shared.Models;
-using System.Collections.Concurrent;
 
 namespace PdfEdit.Api.Services;
 
-public interface IPdfService
-{
-    Task<PdfUploadResponse> UploadPdfAsync(Stream pdfStream, string fileName);
-    Task<byte[]> ProcessPdfAsync(PdfEditRequest request);
-    void CleanupDocument(string documentId);
-}
-
 public class PdfService : IPdfService
 {
-    private readonly ConcurrentDictionary<string, byte[]> _documents = new();
-    private readonly ILogger<PdfService> _logger;
+    // A simple in-memory store for temporary file paths
+    private static readonly ConcurrentDictionary<string, string> DocumentPaths = new();
 
-    public PdfService(ILogger<PdfService> logger)
+    public async Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream)
     {
-        _logger = logger;
-    }
+        var documentId = Guid.NewGuid().ToString();
+        
+        // Read the PDF stream into memory
+        using var memoryStream = new MemoryStream();
+        await pdfStream.CopyToAsync(memoryStream);
+        var pdfBytes = memoryStream.ToArray();
+        
+        // Store the original PDF
+        _documents[documentId] = pdfBytes;
 
-    public async Task<PdfUploadResponse> UploadPdfAsync(Stream pdfStream, string fileName)
-    {
-        try
+        // Analyze the PDF to extract form fields
+        var response = new PdfUploadResponse
         {
-            var documentId = Guid.NewGuid().ToString();
-            
-            // Read the PDF stream into memory
-            using var memoryStream = new MemoryStream();
-            await pdfStream.CopyToAsync(memoryStream);
-            var pdfBytes = memoryStream.ToArray();
-            
-            // Store the original PDF
-            _documents[documentId] = pdfBytes;
+            Id = documentId
+        };
 
-            // Analyze the PDF to extract form fields
-            var response = new PdfUploadResponse
+        using var reader = new PdfReader(new MemoryStream(pdfBytes));
+        using var pdfDoc = new PdfDocument(reader);
+        
+        response.PageCount = pdfDoc.GetNumberOfPages();
+        
+        // Extract existing form fields
+        var form = PdfFormCreator.GetAcroForm(pdfDoc, false);
+        if (form != null)
+        {
+            var fields = form.GetAllFormFields();
+            foreach (var field in fields)
             {
-                Id = documentId,
-                FileName = fileName
-            };
-
-            using var reader = new PdfReader(new MemoryStream(pdfBytes));
-            using var pdfDoc = new PdfDocument(reader);
-            
-            response.PageCount = pdfDoc.GetNumberOfPages();
-            
-            // Extract existing form fields
-            var form = PdfFormCreator.GetAcroForm(pdfDoc, false);
-            if (form != null)
-            {
-                var fields = form.GetAllFormFields();
-                foreach (var field in fields)
+                var formField = ConvertToFormField(field.Key, field.Value);
+                if (formField != null)
                 {
-                    var formField = ConvertToFormField(field.Key, field.Value);
-                    if (formField != null)
-                    {
-                        response.FormFields.Add(formField);
-                    }
+                    response.FormFields.Add(formField);
                 }
             }
+        }
 
-            return response;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing PDF upload for file: {FileName}", fileName);
-            throw new InvalidOperationException("Failed to process PDF file", ex);
-        }
+        return response;
     }
 
     public async Task<byte[]> ProcessPdfAsync(PdfEditRequest request)
     {
-        try
+        if (!DocumentPaths.TryGetValue(request.DocumentId, out var filePath))
         {
-            if (!_documents.TryGetValue(request.DocumentId, out var originalPdf))
-            {
-                throw new ArgumentException($"Document not found: {request.DocumentId}");
-            }
+            throw new FileNotFoundException("Document not found or expired.", request.DocumentId);
+        }
 
-            using var inputStream = new MemoryStream(originalPdf);
-            using var outputStream = new MemoryStream();
-            
-            using var reader = new PdfReader(inputStream);
-            using var writer = new PdfWriter(outputStream);
-            using var pdfDoc = new PdfDocument(reader, writer);
-            using var document = new Document(pdfDoc);
+        using var inputStream = new MemoryStream(originalPdf);
+        using var outputStream = new MemoryStream();
+        
+        using var reader = new PdfReader(inputStream);
+        using var writer = new PdfWriter(outputStream);
+        using var pdfDoc = new PdfDocument(reader, writer);
+        using var document = new Document(pdfDoc);
 
-            // Update existing form fields
-            var form = PdfFormCreator.GetAcroForm(pdfDoc, true);
-            if (form != null)
+        // Update existing form fields
+        var form = PdfFormCreator.GetAcroForm(pdfDoc, true);
+        if (form != null)
+        {
+            foreach (var field in request.FormFields)
             {
-                foreach (var field in request.FormFields)
+                var pdfField = form.GetField(field.Name);
+                if (pdfField != null)
                 {
-                    var pdfField = form.GetField(field.Name);
-                    if (pdfField != null)
-                    {
-                        pdfField.SetValue(field.Value);
-                    }
+                    pdfField.SetValue(field.Value);
                 }
-                
-                // Flatten the form to make it non-editable
-                form.FlattenFields();
             }
-
-            // Add new text elements
-            foreach (var textElement in request.TextElements)
-            {
-                AddTextElement(document, pdfDoc, textElement);
-            }
-
-            // Add new image elements (signatures)
-            foreach (var imageElement in request.ImageElements)
-            {
-                AddImageElement(document, pdfDoc, imageElement);
-            }
-
-            document.Close();
-            return outputStream.ToArray();
+            
+            // Flatten the form to make it non-editable
+            form.FlattenFields();
         }
-        catch (Exception ex)
+
+        // Add new text elements
+        foreach (var textElement in request.TextElements)
         {
-            _logger.LogError(ex, "Error processing PDF for document: {DocumentId}", request.DocumentId);
-            throw new InvalidOperationException("Failed to process PDF modifications", ex);
+            AddTextElement(document, pdfDoc, textElement);
         }
+
+        // Add new image elements (signatures)
+        foreach (var imageElement in request.ImageElements)
+        {
+            AddImageElement(document, pdfDoc, imageElement);
+        }
+
+        document.Close();
+        return outputStream.ToArray();
     }
 
     public void CleanupDocument(string documentId)

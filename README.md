@@ -14,7 +14,7 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 - **Backend**: ASP.NET Core Web API (.NET 8) with iText7 for PDF processing
 - **Frontend**: Blazor WebAssembly with Bootstrap UI
-- **Containerization**: Podman and Docker support for easy deployment
+- **Containerization**: Docker and Podman support for easy deployment
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
    scripts\start-docker.bat
    
    # OR manually:
-   docker-compose up --build
+   docker compose up --build
    ```
 
 3. Open your browser and navigate to `http://localhost`
@@ -63,7 +63,7 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 #### Prerequisites
 - .NET 8.0 SDK
-- Podman (recommended) or Docker (optional, for containerized deployment)
+- Docker or Podman (optional, for containerized deployment)
 
 #### Running Locally
 
@@ -73,24 +73,27 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
    cd pdfedit
    ```
 
-2. Restore dependencies:
+2. Restore dependencies and build the solution:
    ```bash
-   dotnet restore
+   dotnet build
    ```
 
-3. Run the API (in one terminal):
+3. **Fix Port Mismatch (Important for local dev):**
+   Edit `src/PdfEdit.Api/Properties/launchSettings.json` and change the `applicationUrl` for the `https` profile to use port `7099` instead of `7127`.
+
+4. Run the API (in one terminal):
    ```bash
    cd src/PdfEdit.Api
-   dotnet run
+   dotnet run --launch-profile https
    ```
 
-4. Run the client (in another terminal):
+5. Run the client (in another terminal):
    ```bash
    cd src/PdfEdit.Client
-   dotnet run
+   dotnet run --launch-profile https
    ```
 
-5. Open your browser and navigate to the client URL (typically `https://localhost:5001`)
+6. Open your browser and navigate to the client URL (typically `https://localhost:7000`)
 
 #### Windows Development
 
@@ -136,16 +139,13 @@ scripts\stop-docker.bat
 ```
 pdfedit/
 ├── src/
-│   ├── PdfEdit.Api/          # Backend API service
+│   ├── PdfEdit.Api/          # Backend API and Frontend Host
 │   │   ├── Controllers/      # API controllers
 │   │   ├── Services/         # PDF processing services
-│   │   └── Dockerfile        # API container configuration
+│   │   └── Dockerfile        # Combined Docker configuration
 │   ├── PdfEdit.Client/       # Blazor WebAssembly frontend
 │   │   ├── Pages/            # Razor pages
-│   │   ├── Services/         # API client services
-│   │   ├── wwwroot/          # Static web assets
-│   │   ├── Dockerfile        # Client container configuration
-│   │   └── nginx.conf        # Nginx configuration for serving
+│   │   └── wwwroot/          # Static web assets
 │   └── PdfEdit.Shared/       # Shared models and DTOs
 ├── scripts/
 │   ├── start-podman.sh       # Start with Podman (Linux/macOS)
@@ -164,6 +164,8 @@ pdfedit/
 ```
 
 ## Container Deployment Options
+
+The application is deployed as a single container where the ASP.NET Core backend serves the Blazor WebAssembly frontend.
 
 ### Podman (Recommended)
 
@@ -222,37 +224,20 @@ docker compose up --build
 
 ### Container Build Issues
 
-**Issue**: Container builds fail with network connectivity errors in restricted environments.
+**Issue**: `dotnet restore` fails during `docker build` in restricted environments.
 
-**Solution**: This is a known limitation in containerized CI/CD environments or networks with restricted internet access. Use the development setup instead:
-
-```bash
-# Development setup (no containers)
-dotnet restore
-cd src/PdfEdit.Api && dotnet run &
-cd src/PdfEdit.Client && dotnet run
-```
-
-### Podman Warnings
-
-**Issue**: Warnings about systemd and cgroup manager.
-
-**Solution**: These warnings are normal in containerized environments and don't affect functionality. For production use, consider:
-```bash
-# Enable lingering (if you have root access)
-loginctl enable-linger $(id -u)
-```
+**Solution**: This is a known limitation in networks with restricted internet access. Ensure your Docker/Podman environment can reach `nuget.org`. If not, you must use the local development setup.
 
 ### Port Conflicts
 
-**Issue**: Port 80 or 8080 already in use.
+**Issue**: Port 80 is already in use on your machine.
 
-**Solution**: Modify the port mappings in the compose files:
+**Solution**: Modify the port mappings in `docker-compose.yml` or `podman-compose.yml`:
 ```yaml
 ports:
-  - "8081:80"    # Change host port
-  - "8082:8080"  # Change host port
+  - "8080:80"    # Change host port from 80 to 8080
 ```
+Then access the application at `http://localhost:8080`.
 
 ### Container Validation
 
@@ -267,6 +252,21 @@ scripts\validate.bat
 
 ## API Endpoints
 
+- `POST /api/pdf/upload` - Upload a PDF file for processing
+- `POST /api/pdf/process` - Process PDF with edits and return the modified file
+- `DELETE /api/pdf/{documentId}` - Clean up temporary document storage
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 - `POST /api/pdf/upload` - Upload a PDF file for processing
 - `POST /api/pdf/process` - Process PDF with edits and return the modified file
 - `DELETE /api/pdf/{documentId}` - Clean up temporary document storage

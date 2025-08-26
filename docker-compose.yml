@@ -1,26 +1,13 @@
 services:
-  pdf-api:
+  pdfedit:
     build:
       context: .
       dockerfile: src/PdfEdit.Api/Dockerfile
-    container_name: pdfedit-api
+    container_name: pdfedit
     ports:
-      - "8080:8080"
+      - "80:80" # Map host port 80 to container port 80
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
-    networks:
-      - pdfedit-network
-    depends_on:
-      - pdf-client
-
-  pdf-client:
-    build:
-      context: .
-      dockerfile: src/PdfEdit.Client/Dockerfile
-    container_name: pdfedit-client
-    ports:
-      - "80:80"
     networks:
       - pdfedit-network
 

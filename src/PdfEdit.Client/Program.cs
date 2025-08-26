@@ -7,14 +7,14 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configure HttpClient for API communication
-// When hosted as static files in the API, use relative URLs
-var apiBaseUrl = builder.HostEnvironment.IsDevelopment() 
-    ? "https://localhost:7127" 
-    : builder.HostEnvironment.BaseAddress;
+// Configure HttpClient for API communication.
+// When hosted by the API, the base address is the host's address.
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+// Register services
+builder.Services.AddScoped<IPdfApiService, PdfApiService>();
 
+await builder.Build().RunAsync();
 // Register services
 builder.Services.AddScoped<IPdfApiService, PdfApiService>();
 

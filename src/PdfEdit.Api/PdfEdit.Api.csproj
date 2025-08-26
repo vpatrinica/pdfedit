@@ -7,14 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="iText7" Version="8.0.5" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.19" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="iText7" Version="8.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PdfEdit.Shared\PdfEdit.Shared.csproj" />
     <ProjectReference Include="..\PdfEdit.Client\PdfEdit.Client.csproj" />
+    <ProjectReference Include="..\PdfEdit.Shared\PdfEdit.Shared.csproj" />
   </ItemGroup>
 
 </Project>

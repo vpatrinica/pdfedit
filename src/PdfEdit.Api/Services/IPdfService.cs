@@ -1,0 +1,12 @@
+using PdfEdit.Shared;
+using System.IO;
+using System.Threading.Tasks;
+
+namespace PdfEdit.Api.Services;
+
+public interface IPdfService
+{
+    Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream);
+    Task<byte[]> ProcessPdfAsync(PdfEditRequest request);
+    void CleanupDocument(string documentId);
+}
