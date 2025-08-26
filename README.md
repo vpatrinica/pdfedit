@@ -28,7 +28,11 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 2. Run with Podman:
    ```bash
+   # Linux/macOS:
    ./scripts/start-podman.sh
+   
+   # Windows:
+   scripts\start-podman.bat
    ```
 
 3. Open your browser and navigate to `http://localhost`
@@ -43,7 +47,12 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 2. Run with Docker Compose:
    ```bash
+   # Linux/macOS:
    ./scripts/start-docker.sh
+   
+   # Windows:
+   scripts\start-docker.bat
+   
    # OR manually:
    docker-compose up --build
    ```
@@ -83,6 +92,36 @@ A self-hosted web application for editing PDF documents. Upload PDFs, fill form 
 
 5. Open your browser and navigate to the client URL (typically `https://localhost:5001`)
 
+#### Windows Development
+
+Windows developers can use the provided batch files for container deployment:
+
+**Using Podman (Recommended for Windows):**
+```cmd
+REM Start the application
+scripts\start-podman.bat
+
+REM Stop the application  
+scripts\stop-podman.bat
+
+REM Validate setup
+scripts\validate.bat
+```
+
+**Using Docker:**
+```cmd
+REM Start the application
+scripts\start-docker.bat
+
+REM Stop the application
+scripts\stop-docker.bat
+```
+
+**Prerequisites for Windows:**
+- .NET 8.0 SDK
+- Podman Desktop or Docker Desktop
+- Windows 10/11 (batch files require Command Prompt or PowerShell)
+
 ## Usage
 
 1. **Upload PDF**: Click "Choose File" and select a PDF document
@@ -109,11 +148,16 @@ pdfedit/
 │   │   └── nginx.conf        # Nginx configuration for serving
 │   └── PdfEdit.Shared/       # Shared models and DTOs
 ├── scripts/
-│   ├── start-podman.sh       # Start with Podman (recommended)
-│   ├── stop-podman.sh        # Stop Podman containers
-│   ├── start-docker.sh       # Start with Docker Compose
-│   ├── stop-docker.sh        # Stop Docker containers
-│   └── validate.sh           # Validate container configurations
+│   ├── start-podman.sh       # Start with Podman (Linux/macOS)
+│   ├── start-podman.bat      # Start with Podman (Windows)
+│   ├── stop-podman.sh        # Stop Podman containers (Linux/macOS)
+│   ├── stop-podman.bat       # Stop Podman containers (Windows)
+│   ├── start-docker.sh       # Start with Docker Compose (Linux/macOS)
+│   ├── start-docker.bat      # Start with Docker Compose (Windows)
+│   ├── stop-docker.sh        # Stop Docker containers (Linux/macOS)
+│   ├── stop-docker.bat       # Stop Docker containers (Windows)
+│   ├── validate.sh           # Validate container configurations (Linux/macOS)
+│   └── validate.bat          # Validate container configurations (Windows)
 ├── docker-compose.yml        # Docker Compose configuration
 ├── podman-compose.yml        # Podman Compose configuration
 └── README.md
@@ -214,7 +258,11 @@ ports:
 
 Use the validation script to check your setup:
 ```bash
+# Linux/macOS:
 ./scripts/validate.sh
+
+# Windows:
+scripts\validate.bat
 ```
 
 ## API Endpoints
