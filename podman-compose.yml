@@ -5,9 +5,10 @@ services:
       dockerfile: src/PdfEdit.Api/Dockerfile
     container_name: pdfedit
     ports:
-      - "80:80" # Map host port 80 to container port 80
+      - "80:80"
+      - "443:443"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      ASPNETCORE_ENVIRONMENT: Development  # <-- Add this line
     networks:
       - pdfedit-network
 
