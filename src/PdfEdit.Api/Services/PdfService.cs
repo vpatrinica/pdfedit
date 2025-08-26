@@ -83,7 +83,7 @@ public class PdfService : IPdfService
         {
             foreach (var field in request.FormFields)
             {
-                if (form.GetField(field.Name) is PdfFormField pdfField)
+                if (form.GetField(field.Name) is var pdfField && pdfField != null)
                 {
                     pdfField.SetValue(field.Value);
                 }
