@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\PdfEdit.Shared\PdfModels.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="itext7" Version="8.0.4" />
   </ItemGroup>
 
 </Project>
