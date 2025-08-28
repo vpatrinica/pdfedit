@@ -92,9 +92,10 @@
 
         window.getCanvasWidth = id => { const c = document.getElementById(id); return c ? c.width : 0; };
         window.getCanvasInfo = id => { const c = document.getElementById(id); return { width: c ? c.width : 0, height: c ? c.height : 0, scale: window._lastPdfScale || 1 }; };
+        window.getImageHeight = id => { const img = document.getElementById(id); return img ? img.naturalHeight : 0; };
+        window.getImageWidth = id => { const img = document.getElementById(id); return img ? img.naturalWidth : 0; };
 
         window.downloadFile = (fileName, base64) => { const link = document.createElement('a'); link.href = 'data:application/pdf;base64,' + base64; link.download = fileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-        window.showPdf = base64 => { const frame = document.getElementById('pdfFrame'); if (frame) frame.src = 'data:application/pdf;base64,' + base64; };
 
         window.enableDragForOverlays = (containerId, dotNetRef) => {
             const container = document.getElementById(containerId); if (!container) return;
@@ -115,6 +116,7 @@
         };
 
         window.getOverlaySize = id => { const el = document.querySelector('.pdf-overlay-item[data-id="' + id + '"]'); return el ? { w: el.offsetWidth, h: el.offsetHeight } : { w: 0, h: 0 }; };
+        window.showPdf = base64 => { const frame = document.getElementById('pdfFrame'); if (frame) frame.src = 'data:application/pdf;base64,' + base64; };
 
         // IndexedDB + localStorage helpers
         const DB_NAME = 'pdfedit-db'; const STORE = 'pdfs'; let dbPromise = null;
