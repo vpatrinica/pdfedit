@@ -8,7 +8,7 @@
 @inject IPdfApiService PdfApiService
 @inject IJSRuntime JSRuntime
 @inject ILogger<Home> Logger
-@implements IDisposable
+
 
 <PageTitle>PDF Editor</PageTitle>
 
@@ -129,6 +129,7 @@
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <span class="text-muted">TXT @textElement.Id.Substring(0,6)</span>
                                         <div>
+                                            <button class="btn btn-sm btn-outline-secondary me-1" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(textElement))">Target</button>
                                             <button class="btn btn-sm btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveTextElement(textElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
@@ -139,8 +140,8 @@
                                         <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
                                     </div>
                                     <div class="row g-1 mb-1">
-                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><input placeholder="X" class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><input placeholder="Y" class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
                                     </div>
                                     <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                 </div>
@@ -163,6 +164,7 @@
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <span class="text-muted">SIG @imageElement.Id.Substring(0,6)</span>
                                         <div>
+                                            <button class="btn btn-sm btn-outline-secondary me-1" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(imageElement))">Target</button>
                                             <button class="btn btn-sm btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveImageElement(imageElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
@@ -189,7 +191,7 @@
                             <div class="mb-2 field-item @(f.Name==_activeFieldName?"selected":"")" @onclick="() => SelectFormField(f)">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <label class="form-label small mb-1">@f.Name (@f.Type)</label>
-                                    <span class="badge bg-light text-dark border small">@centerX.ToString("0.#"), @centerY.ToString("0.#")</span>
+                                    <button class="btn btn-sm btn-outline-secondary" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(f))">Target</button>
                                 </div>
                                 @if (f.Type == PdfFieldType.Text)
                                 { <input class="form-control form-control-sm" @bind="f.Value" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /> }
@@ -388,7 +390,28 @@
     private void SelectTextElement(RichTextElement t){ _activeTextId = t.Id; _activeImageId=null; _activeFieldName=null; StateHasChanged(); }
     private void SelectImageElement(SignatureImageElement i){ _activeImageId = i.Id; _activeTextId=null; _activeFieldName=null; StateHasChanged(); }
 
-    public void Dispose() { _previewCts?.Cancel(); }
+    private async Task ShowTarget(RichTextElement t)
+    {
+        var x = t.Bounds.X + t.Bounds.Width/2.0;
+        var y = t.Bounds.Y + t.Bounds.Height/2.0;
+        await ShowTargetAt(x,y);
+    }
+    private async Task ShowTarget(SignatureImageElement img)
+    {
+        var x = img.Bounds.X + img.Bounds.Width/2.0;
+        var y = img.Bounds.Y + img.Bounds.Height/2.0;
+        await ShowTargetAt(x,y);
+    }
+    private async Task ShowTarget(PdfFormField f)
+    {
+        var x = f.Bounds.X + f.Bounds.Width/2.0;
+        var y = f.Bounds.Y + f.Bounds.Height/2.0;
+        await ShowTargetAt(x,y);
+    }
+    private async Task ShowTargetAt(double x, double y)
+    {
+        try { await JSRuntime.InvokeVoidAsync("showPdfTarget", "pdfPreviewCanvas", x, y); } catch { }
+    }
 
     private static double Clamp(double v, double min, double max) => v < min ? min : (v > max ? max : v);
     private void UpdateImagePosition(SignatureImageElement i, string which, object? val){ if (double.TryParse(val?.ToString(), out var num)){ if (which.EndsWith("X")) i.Bounds.X = Clamp(num,0,_pageWidthPoints - Math.Max(5,i.Bounds.Width)); else i.Bounds.Y = Clamp(num,0,_pageHeightPoints - Math.Max(5,i.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); } }

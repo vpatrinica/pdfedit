@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq; // added for Select
 using iText.Forms;
 using iText.Forms.Fields;
 using iText.IO.Image;
@@ -8,6 +9,7 @@ using iText.Layout.Element;
 using Microsoft.Extensions.Logging;
 using PdfEdit.Shared.Models;
 using RectangleModel = PdfEdit.Shared.Models.Rectangle;
+using iText.Kernel.Colors; // added
 
 namespace PdfEdit.Api.Services;
 
@@ -173,9 +175,34 @@ public class PdfService : IPdfService
             var p = new Paragraph(t.Text)
                 .SetFontSize(t.FontSize)
                 .SetFixedPosition(t.PageNumber, (float)t.Bounds.X, (float)t.Bounds.Y, (float)(t.Bounds.Width <= 0 ? 200 : t.Bounds.Width));
+            var color = TryParseColor(t.Color);
+            if (color != null) p.SetFontColor(color);
             doc.Add(p);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Add text failed {Id}", t.Id); }
+    }
+
+    private Color? TryParseColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        try
+        {
+            hex = hex.Trim();
+            if (hex.StartsWith("#")) hex = hex.Substring(1);
+            if (hex.Length == 3) // short form rgb
+            {
+                hex = string.Concat(hex.Select(c => new string(c, 2)));
+            }
+            if (hex.Length == 6)
+            {
+                var r = Convert.ToInt32(hex.Substring(0, 2), 16);
+                var g = Convert.ToInt32(hex.Substring(2, 2), 16);
+                var b = Convert.ToInt32(hex.Substring(4, 2), 16);
+                return new DeviceRgb(r, g, b);
+            }
+        }
+        catch { }
+        return null;
     }
 
     private void AddImageElement(Document doc, PdfDocument pdfDoc, PdfImageElement img)

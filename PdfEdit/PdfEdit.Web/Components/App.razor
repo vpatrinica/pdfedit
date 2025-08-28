@@ -142,6 +142,21 @@
         window.clearMetadata = function (id) { try { localStorage.removeItem('pdfedit-meta-' + id); } catch (e) { console.warn('clearMetadata failed', e); } };
         window.getLastSessionId = function () { try { return localStorage.getItem('pdfedit-last-id'); } catch { return null; } };
         window.setLastSessionId = function (id) { try { localStorage.setItem('pdfedit-last-id', id); } catch (e) { console.warn('setLastSessionId failed', e); } };
+
+        window.showPdfTarget = function(canvasId, xPt, yPt){
+            const canvas = document.getElementById(canvasId); if(!canvas) return; const ctx = canvas.getContext('2d'); if(!ctx) return;
+            const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
+            const y = canvas.height - yPt; const x = xPt; // convert PDF coord to canvas
+            ctx.putImageData(imgData,0,0);
+            ctx.save();
+            ctx.lineWidth = 3; ctx.setLineDash([10,6]); ctx.strokeStyle = 'rgba(255,0,0,0.75)';
+            ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); // horizontal
+            ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); // vertical
+            ctx.setLineDash([]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,0,0,0.9)';
+            [5,7,10].forEach(r=>{ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); });
+            ctx.restore();
+            setTimeout(()=>{ ctx.putImageData(imgData,0,0); },2000);
+        };
     </script>
     <style>.resize-handle{user-select:none}</style>
 </body>
