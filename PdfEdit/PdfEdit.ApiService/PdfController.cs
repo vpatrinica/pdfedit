@@ -30,7 +30,7 @@ public class PdfController : ControllerBase
                 return BadRequest("No file uploaded");
             }
 
-            if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+            if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             {
                 return BadRequest("Only PDF files are allowed");
             }
@@ -57,16 +57,12 @@ public class PdfController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrEmpty(request.DocumentId))
+            if (string.IsNullOrEmpty(request.DocumentId) && string.IsNullOrEmpty(request.OriginalPdfBase64))
             {
-                return BadRequest("Document ID is required");
+                return BadRequest("Either DocumentId or OriginalPdfBase64 is required");
             }
 
             var processedPdf = await _pdfService.ProcessPdfAsync(request);
-            
-            // Clean up the original document after processing
-            _pdfService.CleanupDocument(request.DocumentId);
-
             return File(processedPdf, "application/pdf", $"edited-document-{DateTime.UtcNow:yyyyMMdd-HHmmss}.pdf");
         }
         catch (ArgumentException ex)
@@ -93,6 +89,20 @@ public class PdfController : ControllerBase
         {
             _logger.LogError(ex, "Error cleaning up document: {DocumentId}", documentId);
             return StatusCode(500, "An error occurred while cleaning up the document");
+        }
+    }
+
+    [HttpGet("{documentId}")]
+    public async Task<IActionResult> GetOriginal(string documentId)
+    {
+        try
+        {
+            var bytes = await _pdfService.GetDocumentAsync(documentId);
+            return File(bytes, "application/pdf");
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound();
         }
     }
 }

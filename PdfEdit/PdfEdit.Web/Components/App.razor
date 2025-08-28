@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="PdfEdit.Web.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -15,6 +16,128 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        (function loadPdfJsViaScriptTag() {
+            const versions = ['3.11.174', '4.2.67'];
+            const cdnPatterns = [
+                v => 'https://cdn.jsdelivr.net/npm/pdfjs-dist@@' + v + '/build/',
+                v => 'https://unpkg.com/pdfjs-dist@@' + v + '/build/',
+                v => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + v + '/'
+            ];
+            let vi = 0, ci = 0;
+            function tryNext() {
+                if (vi >= versions.length) { console.error('pdf.js failed from all versions/CDNs'); return; }
+                const version = versions[vi];
+                if (ci >= cdnPatterns.length) { vi++; ci = 0; tryNext(); return; }
+                const base = cdnPatterns[ci++](version);
+                const script = document.createElement('script');
+                script.src = base + 'pdf.min.js';
+                script.async = true;
+                script.onload = () => {
+                    if (!window.pdfjsLib) { console.warn('Loaded but pdfjsLib missing, trying next'); tryNext(); return; }
+                    const workerSrc = base + 'pdf.worker.min.js';
+                    if (window.pdfjsLib.GlobalWorkerOptions) {
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+                    }
+                    console.log('pdf.js loaded from', script.src);
+                };
+                script.onerror = () => { console.warn('pdf.js load error', script.src); tryNext(); };
+                document.head.appendChild(script);
+            }
+            tryNext();
+        })();
+
+        function _base64ToUint8Array(base64) { const raw = atob(base64); const bytes = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i); return bytes; }
+
+        window.renderPdf = function (base64Data, canvasId, attempt = 0) {
+            if (!window.pdfjsLib) { if (attempt > 80) { console.error('pdf.js not ready'); return; } return setTimeout(() => window.renderPdf(base64Data, canvasId, attempt + 1), 250); }
+            (async () => {
+                try {
+                    const data = _base64ToUint8Array(base64Data);
+                    const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+                    window._pdfedit_lastDoc = data;
+                    const page = await pdf.getPage(1);
+                    const canvas = document.getElementById(canvasId); if (!canvas) return;
+                    const viewport = page.getViewport({ scale: 1.15 });
+                    canvas.width = viewport.width; canvas.height = viewport.height;
+                    window._lastPdfScale = viewport.scale; window._lastPdfHeight = canvas.height;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                } catch (e) { console.error('PDF render error', e); }
+            })();
+        };
+
+        window.renderPdfPage = async function (base64Data, canvasId, pageNumber, scale = 1.15) {
+            try {
+                if (!window.pdfjsLib) { await new Promise(r => setTimeout(r, 250)); return await window.renderPdfPage(base64Data, canvasId, pageNumber, scale); }
+                const data = _base64ToUint8Array(base64Data);
+                const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+                const pageCount = pdf.numPages; if (pageNumber < 1) pageNumber = 1; if (pageNumber > pageCount) pageNumber = pageCount;
+                const page = await pdf.getPage(pageNumber);
+                const viewport = page.getViewport({ scale });
+                const canvas = document.getElementById(canvasId); if (!canvas) return;
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                window._lastPdfScale = viewport.scale; window._lastPdfHeight = canvas.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            } catch (e) { console.error('renderPdfPage error', e); }
+        };
+
+        window.renderPdfEnsure = function (base64Data, canvasId) {
+            let attempts = 0; (function attempt() { if (window.pdfjsLib) { window.renderPdf(base64Data, canvasId); } else if (attempts++ < 120) { setTimeout(attempt, 250); } else { console.error('pdf.js not loaded after waiting'); } })();
+        };
+
+        window.loadPdfMeta = async function (base64) {
+            try { if (!window.pdfjsLib) { await new Promise(r => setTimeout(r, 250)); return await window.loadPdfMeta(base64); } const data = _base64ToUint8Array(base64); const pdf = await window.pdfjsLib.getDocument({ data }).promise; return { pageCount: pdf.numPages }; }
+            catch (e) { console.error('loadPdfMeta error', e); return { pageCount: 1 }; }
+        };
+
+        window.getCanvasWidth = id => { const c = document.getElementById(id); return c ? c.width : 0; };
+        window.getCanvasInfo = id => { const c = document.getElementById(id); return { width: c ? c.width : 0, height: c ? c.height : 0, scale: window._lastPdfScale || 1 }; };
+
+        window.downloadFile = (fileName, base64) => { const link = document.createElement('a'); link.href = 'data:application/pdf;base64,' + base64; link.download = fileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+        window.showPdf = base64 => { const frame = document.getElementById('pdfFrame'); if (frame) frame.src = 'data:application/pdf;base64,' + base64; };
+
+        window.enableDragForOverlays = (containerId, dotNetRef) => {
+            const container = document.getElementById(containerId); if (!container) return;
+            container.querySelectorAll('.pdf-overlay-item').forEach(el => {
+                el.onpointerdown = e => {
+                    if (e.target.classList.contains('resize-handle')) return;
+                    el.setPointerCapture(e.pointerId);
+                    const startX = e.clientX, startY = e.clientY;
+                    const origLeft = parseFloat(el.style.left) || 0, origTop = parseFloat(el.style.top) || 0;
+                    el.onpointermove = mv => { const dx = mv.clientX - startX, dy = mv.clientY - startY; el.style.left = (origLeft + dx) + 'px'; el.style.top = (origTop + dy) + 'px'; };
+                    el.onpointerup = () => { el.onpointermove = null; dotNetRef.invokeMethodAsync('OnOverlayMoved', el.dataset.id, parseFloat(el.style.left), parseFloat(el.style.top)); };
+                };
+                if (!el.querySelector('.resize-handle')) {
+                    const h = document.createElement('div'); h.className = 'resize-handle'; h.style.cssText = 'position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#0d6efd;border:1px solid #fff;border-radius:2px;cursor:se-resize;'; el.appendChild(h);
+                    h.onpointerdown = e => { e.stopPropagation(); h.setPointerCapture(e.pointerId); const startX = e.clientX, startY = e.clientY; const startW = el.offsetWidth, startH = el.offsetHeight; h.onpointermove = mv => { const dx = mv.clientX - startX, dy = mv.clientY - startY; el.style.width = Math.max(20, startW + dx) + 'px'; el.style.height = Math.max(20, startH + dy) + 'px'; }; h.onpointerup = () => { h.onpointermove = null; dotNetRef.invokeMethodAsync('OnOverlayResized', el.dataset.id, el.offsetWidth, el.offsetHeight); }; };
+                }
+            });
+        };
+
+        window.getOverlaySize = id => { const el = document.querySelector('.pdf-overlay-item[data-id="' + id + '"]'); return el ? { w: el.offsetWidth, h: el.offsetHeight } : { w: 0, h: 0 }; };
+
+        // IndexedDB + localStorage helpers
+        const DB_NAME = 'pdfedit-db'; const STORE = 'pdfs'; let dbPromise = null;
+        function getDb() {
+            if (dbPromise) return dbPromise;
+            dbPromise = new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE); };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            return dbPromise;
+        }
+        window.savePdfToIndexedDb = async function (id, base64) { try { const db = await getDb(); const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(base64, id); return tx.complete; } catch (e) { console.error('savePdfToIndexedDb', e); } };
+        window.getPdfFromIndexedDb = async function (id) { try { const db = await getDb(); return await new Promise((res, rej) => { const tx = db.transaction(STORE, 'readonly'); const req = tx.objectStore(STORE).get(id); req.onsuccess = () => res(req.result || null); req.onerror = () => rej(req.error); }); } catch { return null; } };
+
+        window.saveMetadata = function (id, json) { try { localStorage.setItem('pdfedit-meta-' + id, json); } catch (e) { console.warn('saveMetadata failed', e); } };
+        window.loadMetadata = function (id) { try { return localStorage.getItem('pdfedit-meta-' + id); } catch { return null; } };
+        window.clearMetadata = function (id) { try { localStorage.removeItem('pdfedit-meta-' + id); } catch (e) { console.warn('clearMetadata failed', e); } };
+        window.getLastSessionId = function () { try { return localStorage.getItem('pdfedit-last-id'); } catch { return null; } };
+        window.setLastSessionId = function (id) { try { localStorage.setItem('pdfedit-last-id', id); } catch (e) { console.warn('setLastSessionId failed', e); } };
+    </script>
+    <style>.resize-handle{user-select:none}</style>
 </body>
 
 </html>

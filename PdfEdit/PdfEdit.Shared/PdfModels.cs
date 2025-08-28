@@ -20,7 +20,8 @@ public class PdfFormField
 
 public class PdfEditRequest
 {
-    public string DocumentId { get; set; } = string.Empty;
+    public string DocumentId { get; set; } = string.Empty; // optional now
+    public string? OriginalPdfBase64 { get; set; } // new for stateless processing
     public List<PdfFormField> FormFields { get; set; } = new();
     public List<PdfTextElement> TextElements { get; set; } = new();
     public List<PdfImageElement> ImageElements { get; set; } = new();

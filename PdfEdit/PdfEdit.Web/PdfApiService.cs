@@ -9,6 +9,7 @@ public interface IPdfApiService
 {
     Task<PdfUploadResponse?> UploadPdfAsync(IBrowserFile file);
     Task<HttpResponseMessage> ProcessPdfAsync(PdfEditRequest request);
+    Task<byte[]> GetOriginalPdfAsync(string documentId);
 }
 
 public class PdfApiService : IPdfApiService
@@ -67,5 +68,11 @@ public class PdfApiService : IPdfApiService
             _logger.LogError(ex, "Error processing PDF for document: {DocumentId}", request.DocumentId);
             throw;
         }
+    }
+
+    public async Task<byte[]> GetOriginalPdfAsync(string documentId)
+    {
+        var bytes = await _httpClient.GetByteArrayAsync($"api/pdf/{documentId}");
+        return bytes;
     }
 }

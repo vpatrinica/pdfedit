@@ -28,11 +28,10 @@ public class PdfService : IPdfService
     public async Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream, string fileName)
     {
         var documentId = Guid.NewGuid().ToString();
-        
         using var memoryStream = new MemoryStream();
         await pdfStream.CopyToAsync(memoryStream);
         var pdfBytes = memoryStream.ToArray();
-        
+        // retain for backward compatibility (stateless flow may ignore)
         _documents[documentId] = pdfBytes;
 
         var response = new PdfUploadResponse
@@ -43,9 +42,8 @@ public class PdfService : IPdfService
 
         using var reader = new PdfReader(new MemoryStream(pdfBytes));
         using var pdfDoc = new PdfDocument(reader);
-        
         response.PageCount = pdfDoc.GetNumberOfPages();
-        
+
         var form = PdfAcroForm.GetAcroForm(pdfDoc, false);
         if (form != null)
         {
@@ -59,20 +57,27 @@ public class PdfService : IPdfService
                 }
             }
         }
-
         return response;
     }
 
     public async Task<byte[]> ProcessPdfAsync(PdfEditRequest request)
     {
-        if (!_documents.TryGetValue(request.DocumentId, out var originalPdf))
+        byte[] originalPdf;
+        if (!string.IsNullOrEmpty(request.OriginalPdfBase64))
+        {
+            originalPdf = Convert.FromBase64String(request.OriginalPdfBase64);
+        }
+        else if (!string.IsNullOrEmpty(request.DocumentId) && _documents.TryGetValue(request.DocumentId, out var cached))
+        {
+            originalPdf = cached;
+        }
+        else
         {
             throw new FileNotFoundException("Document not found or expired.", request.DocumentId);
         }
 
         using var inputStream = new MemoryStream(originalPdf);
         using var outputStream = new MemoryStream();
-        
         using var reader = new PdfReader(inputStream);
         using var writer = new PdfWriter(outputStream);
         using var pdfDoc = new PdfDocument(reader, writer);
@@ -88,7 +93,6 @@ public class PdfService : IPdfService
                     pdfField.SetValue(field.Value);
                 }
             }
-            
             form.FlattenFields();
         }
 
@@ -96,21 +100,24 @@ public class PdfService : IPdfService
         {
             AddTextElement(document, pdfDoc, textElement);
         }
-
         foreach (var imageElement in request.ImageElements)
         {
             AddImageElement(document, pdfDoc, imageElement);
         }
 
         document.Close();
-
         await Task.CompletedTask;
         return outputStream.ToArray();
     }
 
-    public void CleanupDocument(string documentId)
+    public void CleanupDocument(string documentId) => _documents.TryRemove(documentId, out _);
+
+    public async Task<byte[]> GetDocumentAsync(string documentId)
     {
-        _documents.TryRemove(documentId, out _);
+        if (!_documents.TryGetValue(documentId, out var bytes))
+            throw new FileNotFoundException("Document not found", documentId);
+        await Task.CompletedTask;
+        return bytes;
     }
 
     private PdfEdit.Shared.Models.PdfFormField? ConvertToFormField(string name, iText.Forms.Fields.PdfFormField field)
@@ -119,7 +126,6 @@ public class PdfService : IPdfService
         {
             var bounds = GetFieldBounds(field);
             var fieldType = GetFieldType(field);
-            
             return new PdfEdit.Shared.Models.PdfFormField
             {
                 Name = name,
@@ -158,22 +164,16 @@ public class PdfService : IPdfService
             }
         }
         catch { }
-        
         return new Rectangle();
     }
 
     private PdfFieldType GetFieldType(iText.Forms.Fields.PdfFormField field)
     {
         var fieldType = field.GetFormType();
-        if (fieldType.Equals(PdfName.Tx))
-            return PdfFieldType.Text;
-        else if (fieldType.Equals(PdfName.Btn))
-            return PdfFieldType.Checkbox;
-        else if (fieldType.Equals(PdfName.Ch))
-            return PdfFieldType.ComboBox;
-        else if (fieldType.Equals(PdfName.Sig))
-            return PdfFieldType.Signature;
-        
+        if (fieldType.Equals(PdfName.Tx)) return PdfFieldType.Text;
+        if (fieldType.Equals(PdfName.Btn)) return PdfFieldType.Checkbox;
+        if (fieldType.Equals(PdfName.Ch)) return PdfFieldType.ComboBox;
+        if (fieldType.Equals(PdfName.Sig)) return PdfFieldType.Signature;
         return PdfFieldType.Text;
     }
 
@@ -192,7 +192,6 @@ public class PdfService : IPdfService
             }
         }
         catch { }
-        
         return 1;
     }
 
@@ -201,15 +200,13 @@ public class PdfService : IPdfService
         try
         {
             var page = pdfDoc.GetPage(textElement.PageNumber);
-            
-            var text = new Paragraph(textElement.Text)
+            var paragraph = new Paragraph(textElement.Text)
                 .SetFontSize(textElement.FontSize)
-                .SetFixedPosition(textElement.PageNumber, 
-                                (float)textElement.Bounds.X, 
-                                (float)textElement.Bounds.Y, 
-                                (float)textElement.Bounds.Width);
-
-            document.Add(text);
+                .SetFixedPosition(textElement.PageNumber,
+                                   (float)textElement.Bounds.X,
+                                   (float)textElement.Bounds.Y,
+                                   (float)(textElement.Bounds.Width <= 0 ? 200 : textElement.Bounds.Width));
+            document.Add(paragraph);
         }
         catch (Exception ex)
         {
@@ -224,12 +221,13 @@ public class PdfService : IPdfService
             var imageBytes = Convert.FromBase64String(imageElement.ImageData);
             var imageData = ImageDataFactory.Create(imageBytes);
             var image = new Image(imageData);
-
             image.SetFixedPosition(imageElement.PageNumber,
-                                 (float)imageElement.Bounds.X,
-                                 (float)imageElement.Bounds.Y);
-            image.ScaleToFit((float)imageElement.Bounds.Width, (float)imageElement.Bounds.Height);
-
+                                   (float)imageElement.Bounds.X,
+                                   (float)imageElement.Bounds.Y);
+            if (imageElement.Bounds.Width > 0 && imageElement.Bounds.Height > 0)
+            {
+                image.ScaleToFit((float)imageElement.Bounds.Width, (float)imageElement.Bounds.Height);
+            }
             document.Add(image);
         }
         catch (Exception ex)

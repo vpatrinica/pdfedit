@@ -1,9 +1,14 @@
 ﻿@page "/"
+@rendermode InteractiveServer
 @using PdfEdit.Shared.Models
 @using PdfEdit.Client.Services
+@using Microsoft.JSInterop
+@using System.Linq
+@using System.Text.Json
 @inject IPdfApiService PdfApiService
 @inject IJSRuntime JSRuntime
 @inject ILogger<Home> Logger
+@implements IDisposable
 
 <PageTitle>PDF Editor</PageTitle>
 
@@ -11,12 +16,13 @@
     <div class="row">
         <div class="col-12">
             <h1>PDF Editor</h1>
-            <p>Upload, edit, and download PDF documents with ease.</p>
+            <p>Upload, edit, and sign PDF documents.</p>
         </div>
     </div>
 
-    @if (!_pdfLoaded)
+    @if (_uploadResponse == null)
     {
+        <!-- Upload view -->
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card">
@@ -29,14 +35,86 @@
                         {
                             <div class="d-flex align-items-center">
                                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                <span>Uploading and processing PDF...</span>
+                                <span>Loading PDF locally...</span>
                             </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_uploadStatus))
+                        {
+                            <div class="small text-muted">@_uploadStatus</div>
                         }
                         @if (!string.IsNullOrEmpty(_errorMessage))
                         {
-                            <div class="alert alert-danger" role="alert">
-                                @_errorMessage
-                            </div>
+                            <div class="alert alert-danger" role="alert">@_errorMessage</div>
+                        }
+                        @if (_restoredSession)
+                        {
+                            <div class="alert alert-info small mt-3">Previous session restored. Click Edit PDF to continue.</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!_pdfLoaded)
+    {
+        <!-- Post-upload view with separate details panel -->
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">@_uploadResponse?.FileName</h5>
+                        <div>
+                            <button class="btn btn-primary" @onclick="BeginEdit"><i class="bi bi-pencil-square"></i> Edit PDF</button>
+                            <button class="btn btn-outline-secondary ms-2" @onclick="Reset">Upload Another</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1"><strong>Pages:</strong> @_uploadResponse?.PageCount</p>
+                        <p class="mb-1"><strong>Form Fields:</strong> @_uploadResponse?.FormFields.Count</p>
+                        @if (_uploadResponse?.FormFields.Any() == true)
+                        {
+                            <div class="small text-muted mb-2">Fields listed in panel on the right. Edit values after entering edit mode.</div>
+                        }
+                        <div class="mt-3">
+                            <button class="btn btn-success" @onclick="BeginEdit"><i class="bi bi-magic"></i> Start Editing</button>
+                        </div>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger">@_errorMessage</div>
+                }
+            </div>
+            <div class="col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">Document Details</span>
+                        <span class="badge bg-info text-dark">Ready (Local)</span>
+                    </div>
+                    <div class="card-body small" style="max-height:300px; overflow:auto;">
+                        @if (_uploadResponse != null)
+                        {
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5">Session Id</dt>
+                                <dd class="col-sm-7 text-break">@_uploadResponse.Id</dd>
+                                <dt class="col-sm-5">File Name</dt>
+                                <dd class="col-sm-7 text-break">@_uploadResponse.FileName</dd>
+                                <dt class="col-sm-5">Pages</dt>
+                                <dd class="col-sm-7">@_uploadResponse.PageCount</dd>
+                                <dt class="col-sm-5">Form Fields</dt>
+                                <dd class="col-sm-7">@_uploadResponse.FormFields.Count</dd>
+                            </dl>
+                            @if (_uploadResponse.FormFields.Any())
+                            {
+                                <hr />
+                                <div class="fw-semibold mb-1">Fields</div>
+                                <ul class="list-unstyled mb-0">
+                                    @foreach (var f in _uploadResponse.FormFields)
+                                    {
+                                        <li class="mb-1"><span class="text-muted">[@f.Type]</span> @f.Name</li>
+                                    }
+                                </ul>
+                            }
                         }
                     </div>
                 </div>
@@ -45,12 +123,19 @@
     }
     else
     {
+        <!-- Editor view -->
         <div class="row">
             <div class="col-md-8">
-                <div class="card">
+                <div class="card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">@_uploadResponse?.FileName</h5>
-                        <div>
+                        <div class="d-flex align-items-center flex-wrap">
+                            <button class="btn btn-outline-secondary me-2" @onclick="ExitEdit" disabled="@_isProcessing">Back</button>
+                            <div class="btn-group me-3" role="group" aria-label="Page navigation">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="PrevPage" disabled="@(_currentPage<=1)"><i class="bi bi-chevron-left"></i></button>
+                                <span class="btn btn-sm btn-light disabled">Pg @_currentPage / @_uploadResponse?.PageCount</span>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="NextPage" disabled="@(_uploadResponse==null || _currentPage>=_uploadResponse.PageCount)"><i class="bi bi-chevron-right"></i></button>
+                            </div>
                             <button class="btn btn-primary me-2" @onclick="AddTextBox" disabled="@_isProcessing">
                                 <i class="bi bi-type"></i> Add Text
                             </button>
@@ -60,22 +145,51 @@
                             <button class="btn btn-success" @onclick="SaveAndDownload" disabled="@_isProcessing">
                                 @if (_isProcessing)
                                 {
-                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
                                 }
                                 <i class="bi bi-download"></i> Save & Download
                             </button>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <!-- PDF Viewer will be rendered here -->
-                        <div id="pdfViewer" style="height: 600px; border: 1px solid #ccc;">
-                            <canvas id="pdfCanvas"></canvas>
+                    <div class="card-body position-relative">
+                        <div id="pdfViewer" style="height: 600px; overflow:auto; border: 1px solid #ccc; position:relative;">
+                            <canvas id="pdfCanvas" style="display:@(_pdfJsFailed ? "none" : "block")"></canvas>
+                            @if (_pdfJsFailed)
+                            {
+                                <iframe id="pdfFrame" style="width:100%;height:100%;border:none;"></iframe>
+                            }
+                            <div id="overlayLayer" style="position:absolute; left:0; top:0; pointer-events:none; display:@(_pdfJsFailed ? "none" : "block")">
+                                @foreach (var textElement in _textElements.Where(t=>t.PageNumber==_currentPage)
+)
+                                {
+                                    var left = textElement.XScreen + "px"; var top = textElement.YScreen + "px"; var fs = textElement.FontSize + "px"; var w = (textElement.Bounds.Width <=0 ? 200 : textElement.Bounds.Width) + "px"; var h = (textElement.Bounds.Height <=0 ? 20 : textElement.Bounds.Height) + "px";
+                                    <div class="pdf-overlay-item border rounded px-1" data-page="@textElement.PageNumber" data-id="@textElement.Id" style="position:absolute; left:@left; top:@top; width:@w; height:@h; font-size:@fs; color:@textElement.Color; background:rgba(255,255,255,0.4); cursor:move; pointer-events:auto;">
+                                        @textElement.Text
+                                    </div>
+                                }
+                                @foreach (var imageElement in _imageElements.Where(i=>i.PageNumber==_currentPage)
+)
+                                {
+                                    var left = imageElement.XScreen + "px"; var top = imageElement.YScreen + "px"; var w = (imageElement.Bounds.Width <=0?100:imageElement.Bounds.Width) + "px"; var h = (imageElement.Bounds.Height<=0?50:imageElement.Bounds.Height) + "px";
+                                    <img class="pdf-overlay-item" data-page="@imageElement.PageNumber" data-id="@imageElement.Id" src="data:image/png;base64,@imageElement.ImageData" style="position:absolute; left:@left; top:@top; width:@w; height:@h; cursor:move; pointer-events:auto;" />
+                                }
+                            </div>
                         </div>
+                        @if (_isRendering)
+                        {
+                            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background:rgba(255,255,255,0.6);">
+                                <div class="spinner-border" role="status"></div>
+                            </div>
+                        }
                     </div>
                 </div>
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger">@_errorMessage</div>
+                }
             </div>
             <div class="col-md-4">
-                <div class="card">
+                <div class="card mb-3">
                     <div class="card-header">
                         <h5 class="mb-0">Document Properties</h5>
                     </div>
@@ -85,41 +199,13 @@
                     </div>
                 </div>
 
-                @if (_uploadResponse?.FormFields.Any() == true)
-                {
-                    <div class="card mt-3">
-                        <div class="card-header">
-                            <h5 class="mb-0">Form Fields</h5>
-                        </div>
-                        <div class="card-body">
-                            @foreach (var field in _uploadResponse.FormFields)
-                            {
-                                <div class="mb-3">
-                                    <label class="form-label">@field.Name</label>
-                                    @if (field.Type == PdfFieldType.Text)
-                                    {
-                                        <input type="text" class="form-control" @bind="field.Value" />
-                                    }
-                                    else if (field.Type == PdfFieldType.Checkbox)
-                                    {
-                                        <div class="form-check">
-                                            <input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(field)" @onchange="@((e) => SetCheckboxValue(field, (bool)e.Value!))" />
-                                            <label class="form-check-label">@field.Name</label>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
-
                 @if (_textElements.Any())
                 {
-                    <div class="card mt-3">
+                    <div class="card mb-3">
                         <div class="card-header">
                             <h5 class="mb-0">Text Elements</h5>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" style="max-height:200px; overflow:auto;">
                             @foreach (var textElement in _textElements)
                             {
                                 <div class="mb-3 p-2 border rounded">
@@ -129,13 +215,39 @@
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
-                                    <input type="text" class="form-control" @bind="textElement.Text" placeholder="Enter text..." />
-                                    <div class="row mt-2">
+                                    <input type="text" class="form-control" @bind="textElement.Text" @bind:after="SaveSession" placeholder="Enter text..." />
+                                    <div class="row mt-2 g-1">
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0">Pg</label>
+                                            <input type="number" class="form-control form-control-sm" @bind="textElement.PageNumber" @bind:after="SaveSession" min="1" max="@_uploadResponse?.PageCount" />
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0">Size</label>
+                                            <input type="number" class="form-control form-control-sm" @bind="textElement.FontSize" @bind:after="SaveSession" min="6" max="96" />
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0">Color</label>
+                                            <input type="color" class="form-control form-control-sm form-control-color" style="padding:0;" @bind="textElement.Color" @bind:after="SaveSession" />
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2 g-1">
                                         <div class="col-6">
-                                            <input type="number" class="form-control" @bind="textElement.FontSize" min="8" max="72" />
+                                            <label class="form-label small mb-0">W</label>
+                                            <input type="number" class="form-control form-control-sm" @bind="textElement.Bounds.Width" @bind:after="SaveSession" min="10" />
                                         </div>
                                         <div class="col-6">
-                                            <input type="color" class="form-control form-control-color" @bind="textElement.Color" />
+                                            <label class="form-label small mb-0">H</label>
+                                            <input type="number" class="form-control form-control-sm" @bind="textElement.Bounds.Height" @bind:after="SaveSession" min="10" />
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2 g-1">
+                                        <div class="col-6">
+                                            <label class="form-label small mb-0">X</label>
+                                            <input type="number" class="form-control form-control-sm" value="@textElement.Bounds.X" @onchange="e=>UpdateTextPosition(textElement, nameof(textElement.Bounds.X), e.Value)" />
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small mb-0">Y</label>
+                                            <input type="number" class="form-control form-control-sm" value="@textElement.Bounds.Y" @onchange="e=>UpdateTextPosition(textElement, nameof(textElement.Bounds.Y), e.Value)" />
                                         </div>
                                     </div>
                                 </div>
@@ -146,21 +258,46 @@
 
                 @if (_imageElements.Any())
                 {
-                    <div class="card mt-3">
+                    <div class="card mb-3">
                         <div class="card-header">
                             <h5 class="mb-0">Signatures</h5>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" style="max-height:200px; overflow:auto;">
                             @foreach (var imageElement in _imageElements)
                             {
                                 <div class="mb-3 p-2 border rounded">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <small class="text-muted">Signature @(imageElement.Id.Substring(0, 8))</small>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveImageElement(imageElement.Id)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                        <small class="text-muted">Signature @(imageElement.Id.Substring(0,8))</small>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveImageElement(imageElement.Id)"><i class="bi bi-trash"></i></button>
                                     </div>
-                                    <img src="data:image/png;base64,@imageElement.ImageData" class="img-thumbnail" style="max-width: 100px; max-height: 50px;" />
+                                    <div class="mb-2 small">Pg <input type="number" style="width:55px" @bind="imageElement.PageNumber" @bind:after="OnSignatureMetaChanged" min="1" max="@_uploadResponse?.PageCount" /> W <input type="number" style="width:65px" @bind="imageElement.Bounds.Width" @bind:after="OnSignatureMetaChanged" min="10" /> H <input type="number" style="width:65px" @bind="imageElement.Bounds.Height" @bind:after="OnSignatureMetaChanged" min="10" /></div>
+                                    <div class="mb-2 small">X <input type="number" style="width:70px" value="@imageElement.Bounds.X" @onchange="e=>UpdateImagePosition(imageElement, nameof(imageElement.Bounds.X), e.Value)" /> Y <input type="number" style="width:70px" value="@imageElement.Bounds.Y" @onchange="e=>UpdateImagePosition(imageElement, nameof(imageElement.Bounds.Y), e.Value)" /></div>
+                                    <div class="mb-1 small">Scale (@imageElement.ScalePercent%)
+                                        <input type="range" min="10" max="400" step="5" @bind="imageElement.ScalePercent" @bind:after="() => ApplySignatureScale(imageElement)" class="form-range" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_uploadResponse?.FormFields.Any() == true)
+                {
+                    <div class="card mb-3">
+                        <div class="card-header"><h5 class="mb-0">Form Fields</h5></div>
+                        <div class="card-body" style="max-height:250px;overflow:auto;">
+                            @foreach (var f in _uploadResponse.FormFields)
+                            {
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">@f.Name (@f.Type)</label>
+                                    @if (f.Type == PdfFieldType.Text)
+                                    {
+                                        <input class="form-control form-control-sm" @bind="f.Value" @bind:after="SaveSession" />
+                                    }
+                                    else if (f.Type == PdfFieldType.Checkbox)
+                                    {
+                                        <input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(f)" @onchange="@(e=> { SetCheckboxValue(f,(bool)e.Value!); SaveSession(); })" />
+                                    }
                                 </div>
                             }
                         </div>
@@ -179,164 +316,343 @@
     private bool _pdfLoaded = false;
     private bool _isUploading = false;
     private bool _isProcessing = false;
+    private bool _isRendering = false;
     private string _errorMessage = string.Empty;
+    private string _uploadStatus = string.Empty;
+    private string? _originalPdfBase64;
+    private bool _restoredSession = false;
+    private bool _restoreAttempted = false;
     private InputFile? _signatureFileInput;
 
-    private List<PdfTextElement> _textElements = new();
-    private List<PdfImageElement> _imageElements = new();
+    private List<RichTextElement> _textElements = new();
+    private List<SignatureImageElement> _imageElements = new();
+    private DotNetObjectReference<Home>? _objRef;
+    private bool _pdfJsFailed = false;
+
+    private double _canvasScale = 1;
+    private double _canvasPageHeight = 0;
+    private int _currentPage = 1;
+    private double _viewerScale = 1.15;
+
+    public class RichTextElement : PdfTextElement { public double XScreen { get; set; } public double YScreen { get; set; } }
+    public class SignatureImageElement : PdfImageElement { public double XScreen { get; set; } public double YScreen { get; set; } public double BaseWidth { get; set; } public double BaseHeight { get; set; } public int ScalePercent { get; set; } = 100; }
+    private class CanvasInfo { public double width { get; set; } public double height { get; set; } public double scale { get; set; } }
+
+    private async Task TryRestoreSessionAsync()
+    {
+        if (_restoreAttempted) return; _restoreAttempted = true;
+        try
+        {
+            var lastId = await JSRuntime.InvokeAsync<string?>("getLastSessionId");
+            if (!string.IsNullOrEmpty(lastId))
+            {
+                var metaJson = await JSRuntime.InvokeAsync<string?>("loadMetadata", lastId);
+                var pdfBase = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", lastId);
+                if (!string.IsNullOrEmpty(metaJson) && !string.IsNullOrEmpty(pdfBase))
+                {
+                    RestoreFromMetadata(metaJson, pdfBase);
+                    _restoredSession = true;
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to restore session"); }
+    }
+
+    private void RestoreFromMetadata(string json, string base64)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            _uploadResponse = JsonSerializer.Deserialize<PdfUploadResponse>(root.GetProperty("upload").GetRawText());
+            _textElements = JsonSerializer.Deserialize<List<RichTextElement>>(root.GetProperty("texts").GetRawText()) ?? new();
+            _imageElements = JsonSerializer.Deserialize<List<SignatureImageElement>>(root.GetProperty("images").GetRawText()) ?? new();
+            _originalPdfBase64 = base64;
+        }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to parse session metadata"); }
+    }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null) return;
-
-        _isUploading = true;
-        _errorMessage = string.Empty;
-        StateHasChanged();
-
+        var file = e.File; if (file == null) return;
+        _isUploading = true; _uploadStatus = "Uploading..."; _errorMessage = string.Empty; StateHasChanged();
         try
         {
-            _uploadResponse = await PdfApiService.UploadPdfAsync(file);
-            if (_uploadResponse != null)
+            // Read file into base64 for local stateless editing
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
+            _originalPdfBase64 = Convert.ToBase64String(ms.ToArray());
+
+            // Server side metadata + form fields (pure C# path)
+            PdfUploadResponse? serverResp = null;
+            try
             {
-                _pdfLoaded = true;
-                await LoadPdfViewer();
+                serverResp = await PdfApiService.UploadPdfAsync(file);
+            }
+            catch (Exception exMeta)
+            {
+                Logger.LogWarning(exMeta, "Server upload (metadata) failed");
+            }
+
+            if (serverResp != null)
+            {
+                _uploadResponse = serverResp;
+                _uploadStatus = "Server metadata loaded";
             }
             else
             {
-                _errorMessage = "Failed to upload PDF. Please try again.";
+                // Fallback minimal metadata if server unavailable
+                _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 };
+                _uploadStatus = "Loaded locally (no server metadata)";
             }
+
+            await JSRuntime.InvokeVoidAsync("savePdfToIndexedDb", _uploadResponse.Id, _originalPdfBase64);
+            await JSRuntime.InvokeVoidAsync("setLastSessionId", _uploadResponse.Id);
+            SaveSession();
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Error uploading PDF: {ex.Message}";
-            Logger.LogError(ex, "Error uploading PDF");
+            _errorMessage = $"Error reading/uploading PDF: {ex.Message}";
+            Logger.LogError(ex, "OnFileSelected failed");
         }
-        finally
-        {
-            _isUploading = false;
-            StateHasChanged();
-        }
+        finally { _isUploading = false; StateHasChanged(); }
+    }
+
+    private async Task BeginEdit()
+    {
+        if (_uploadResponse == null) return;
+        if (string.IsNullOrEmpty(_originalPdfBase64))
+            _originalPdfBase64 = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", _uploadResponse.Id);
+        _pdfLoaded = true; _currentPage = 1; StateHasChanged();
+        await LoadPdfViewer();
+    }
+
+    private void ExitEdit() { _pdfLoaded = false; _pdfJsFailed = false; _isRendering = false; StateHasChanged(); }
+
+    private void Reset()
+    {
+        if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id);
+        _uploadResponse = null; _pdfLoaded = false; _textElements.Clear(); _imageElements.Clear(); _errorMessage = string.Empty; _uploadStatus = string.Empty; _pdfJsFailed = false; _originalPdfBase64 = null; _restoredSession = false; StateHasChanged();
     }
 
     private async Task LoadPdfViewer()
     {
-        // For now, just show a placeholder. In a full implementation, 
-        // we would integrate PDF.js here to render the PDF
-        await JSRuntime.InvokeVoidAsync("console.log", "PDF loaded - integrate PDF.js here");
+        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
+        try
+        {
+            _isRendering = true; _pdfJsFailed = false; StateHasChanged();
+            await JSRuntime.InvokeVoidAsync("renderPdfPage", _originalPdfBase64, "pdfCanvas", _currentPage, _viewerScale);
+            await Task.Delay(200);
+            await SyncScreenPositionsFromPdf();
+            var info = await JSRuntime.InvokeAsync<CanvasInfo>("getCanvasInfo", "pdfCanvas");
+            _canvasScale = info.scale == 0 ? 1 : info.scale; _canvasPageHeight = info.height;
+        }
+        catch (Exception ex)
+        {
+            _pdfJsFailed = true; _errorMessage = $"Render fallback: {ex.Message}"; Logger.LogError(ex, "Render PDF failed");
+            try { await JSRuntime.InvokeVoidAsync("showPdf", _originalPdfBase64); } catch { }
+        }
+        finally { _isRendering = false; StateHasChanged(); }
+    }
+
+    private async Task SyncScreenPositionsFromPdf()
+    {
+        try
+        {
+            var info = await JSRuntime.InvokeAsync<CanvasInfo>("getCanvasInfo", "pdfCanvas");
+            _canvasScale = info.scale == 0 ? 1 : info.scale; _canvasPageHeight = info.height;
+            double scale = _canvasScale; double pageHeight = _canvasPageHeight;
+            foreach (var t in _textElements)
+            {
+                t.XScreen = t.Bounds.X * scale; t.YScreen = (pageHeight - t.Bounds.Y - t.Bounds.Height) * scale;
+            }
+            foreach (var i in _imageElements)
+            {
+                i.XScreen = i.Bounds.X * scale; i.YScreen = (pageHeight - i.Bounds.Y - i.Bounds.Height) * scale;
+            }
+        }
+        catch (Exception ex) { Logger.LogDebug(ex, "SyncScreenPositionsFromPdf failed"); }
     }
 
     private void AddTextBox()
     {
-        var textElement = new PdfTextElement
-        {
-            Id = Guid.NewGuid().ToString(),
-            Text = "New Text",
-            PageNumber = 1,
-            FontSize = 12,
-            Color = "#000000",
-            Bounds = new PdfEdit.Shared.Models.Rectangle { X = 100, Y = 100, Width = 200, Height = 20 }
-        };
-        _textElements.Add(textElement);
-        StateHasChanged();
+        var t = new RichTextElement { Id = Guid.NewGuid().ToString(), Text = "New Text", PageNumber = _currentPage, FontSize = 14, Color = "#000000", Bounds = new Rectangle { X = 50, Y = 700, Width = 200, Height = 20 }, XScreen = 50, YScreen = 100 };
+        _textElements.Add(t); SaveSession(); StateHasChanged();
     }
 
-    private async Task UploadSignature()
-    {
-        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()");
-    }
+    private async Task UploadSignature() => await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()");
 
     private async Task OnSignatureSelected(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null) return;
-
+        var file = e.File; if (file == null) return;
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024); // 5MB limit
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
+            using var stream = file.OpenReadStream(5 * 1024 * 1024); using var ms = new MemoryStream(); await stream.CopyToAsync(ms);
             var imageData = Convert.ToBase64String(ms.ToArray());
-
-            var imageElement = new PdfImageElement
-            {
-                Id = Guid.NewGuid().ToString(),
-                ImageData = imageData,
-                PageNumber = 1,
-                Bounds = new PdfEdit.Shared.Models.Rectangle { X = 100, Y = 200, Width = 100, Height = 50 }
-            };
-            _imageElements.Add(imageElement);
-            StateHasChanged();
+            var img = new SignatureImageElement { Id = Guid.NewGuid().ToString(), ImageData = imageData, PageNumber = _currentPage, Bounds = new Rectangle { X = 50, Y = 650, Width = 100, Height = 50 }, XScreen = 50, YScreen = 140, BaseWidth = 100, BaseHeight = 50 };
+            _imageElements.Add(img); SaveSession(); StateHasChanged();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Error uploading signature: {ex.Message}";
-            Logger.LogError(ex, "Error uploading signature");
-        }
+        catch (Exception ex) { _errorMessage = $"Error uploading signature: {ex.Message}"; Logger.LogError(ex, "Signature upload"); }
     }
 
-    private void RemoveTextElement(string id)
-    {
-        _textElements.RemoveAll(t => t.Id == id);
-        StateHasChanged();
-    }
-
-    private void RemoveImageElement(string id)
-    {
-        _imageElements.RemoveAll(i => i.Id == id);
-        StateHasChanged();
-    }
-
-    private bool GetCheckboxValue(PdfFormField field)
-    {
-        return !string.IsNullOrEmpty(field.Value) && field.Value.ToLower() != "false" && field.Value != "0";
-    }
-
-    private void SetCheckboxValue(PdfFormField field, bool value)
-    {
-        field.Value = value ? "true" : "false";
-    }
+    private void RemoveTextElement(string id) { _textElements.RemoveAll(t => t.Id == id); SaveSession(); StateHasChanged(); }
+    private void RemoveImageElement(string id) { _imageElements.RemoveAll(i => i.Id == id); SaveSession(); StateHasChanged(); }
 
     private async Task SaveAndDownload()
     {
-        if (_uploadResponse == null) return;
-
-        _isProcessing = true;
-        _errorMessage = string.Empty;
-        StateHasChanged();
-
+        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
+        _isProcessing = true; _errorMessage = string.Empty; StateHasChanged();
         try
         {
-            var request = new PdfEditRequest
+            foreach (var t in _textElements.Where(t=>t.PageNumber==_currentPage))
             {
-                DocumentId = _uploadResponse.Id,
-                FormFields = _uploadResponse.FormFields,
-                TextElements = _textElements,
-                ImageElements = _imageElements
-            };
-
+                var sizeEl = await JSRuntime.InvokeAsync<JsonElement>("getOverlaySize", t.Id);
+                if (sizeEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (sizeEl.TryGetProperty("w", out var wEl) && wEl.TryGetDouble(out var wv) && wv > 0) t.Bounds.Width = wv;
+                    if (sizeEl.TryGetProperty("h", out var hEl) && hEl.TryGetDouble(out var hv) && hv > 0) t.Bounds.Height = hv;
+                }
+            }
+            foreach (var i in _imageElements.Where(i=>i.PageNumber==_currentPage))
+            {
+                var sizeEl = await JSRuntime.InvokeAsync<JsonElement>("getOverlaySize", i.Id);
+                if (sizeEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (sizeEl.TryGetProperty("w", out var wEl) && wEl.TryGetDouble(out var wv) && wv > 0) i.Bounds.Width = wv;
+                    if (sizeEl.TryGetProperty("h", out var hEl) && hEl.TryGetDouble(out var hv) && hv > 0) i.Bounds.Height = hv;
+                }
+            }
+            var request = new PdfEditRequest { OriginalPdfBase64 = _originalPdfBase64, FormFields = _uploadResponse.FormFields, TextElements = _textElements.Cast<PdfTextElement>().ToList(), ImageElements = _imageElements.Cast<PdfImageElement>().ToList() };
             var response = await PdfApiService.ProcessPdfAsync(request);
             if (response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadAsByteArrayAsync();
-                var fileName = $"edited-document-{DateTime.Now:yyyyMMdd-HHmmss}.pdf";
-                
-                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(content));
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                await JSRuntime.InvokeVoidAsync("downloadFile", $"edited-document-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", Convert.ToBase64String(bytes));
             }
-            else
-            {
-                _errorMessage = "Failed to process PDF. Please try again.";
-            }
+            else { _errorMessage = $"Process failed: {(int)response.StatusCode} {response.ReasonPhrase}"; }
         }
-        catch (Exception ex)
+        catch (Exception ex) { _errorMessage = $"Process error: {ex.Message}"; Logger.LogError(ex, "Process PDF"); }
+        finally { _isProcessing = false; StateHasChanged(); }
+    }
+
+    private void SaveSession()
+    {
+        if (_uploadResponse == null) return;
+        try
         {
-            _errorMessage = $"Error processing PDF: {ex.Message}";
-            Logger.LogError(ex, "Error processing PDF");
+            var wrapper = new { upload = _uploadResponse, texts = _textElements, images = _imageElements };
+            JSRuntime.InvokeVoidAsync("saveMetadata", _uploadResponse.Id, JsonSerializer.Serialize(wrapper));
         }
-        finally
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to save session"); }
+    }
+
+    private bool GetCheckboxValue(PdfFormField field) => !string.IsNullOrEmpty(field.Value) && field.Value.ToLower() != "false" && field.Value != "0";
+    private void SetCheckboxValue(PdfFormField field, bool value) { field.Value = value ? "true" : "false"; }
+
+    private void PrevPage() { if (_currentPage > 1) { _currentPage--; RenderCurrentPage(); } }
+    private void NextPage() { if (_uploadResponse != null && _currentPage < _uploadResponse.PageCount) { _currentPage++; RenderCurrentPage(); } }
+    private async void RenderCurrentPage() { if (string.IsNullOrEmpty(_originalPdfBase64) || _uploadResponse == null) return; await JSRuntime.InvokeVoidAsync("renderPdfPage", _originalPdfBase64, "pdfCanvas", _currentPage, _viewerScale); await SyncScreenPositionsFromPdf(); StateHasChanged(); }
+
+    private void UpdateTextPosition(RichTextElement t, string which, object? val)
+    {
+        if (double.TryParse(val?.ToString(), out var num))
         {
-            _isProcessing = false;
-            StateHasChanged();
+            if (which.EndsWith("X")) t.Bounds.X = num; else t.Bounds.Y = num;
+            t.XScreen = t.Bounds.X * _canvasScale;
+            t.YScreen = (_canvasPageHeight - t.Bounds.Y - t.Bounds.Height) * _canvasScale;
+            SaveSession(); StateHasChanged();
         }
     }
+    private void UpdateImagePosition(SignatureImageElement i, string which, object? val)
+    {
+        if (double.TryParse(val?.ToString(), out var num))
+        {
+            if (which.EndsWith("X")) i.Bounds.X = num; else i.Bounds.Y = num;
+            i.XScreen = i.Bounds.X * _canvasScale; i.YScreen = (_canvasPageHeight - i.Bounds.Y - i.Bounds.Height) * _canvasScale;
+            SaveSession(); StateHasChanged();
+        }
+    }
+
+    private void OnSignatureMetaChanged() { SaveSession(); StateHasChanged(); }
+    private void ApplySignatureScale(SignatureImageElement sig)
+    {
+        if (sig.BaseWidth <= 0 || sig.BaseHeight <= 0) { sig.BaseWidth = sig.Bounds.Width; sig.BaseHeight = sig.Bounds.Height; }
+        var factor = sig.ScalePercent / 100.0;
+        sig.Bounds.Width = sig.BaseWidth * factor;
+        sig.Bounds.Height = sig.BaseHeight * factor;
+        sig.XScreen = sig.Bounds.X * _canvasScale;
+        sig.YScreen = (_canvasPageHeight - sig.Bounds.Y - sig.Bounds.Height) * _canvasScale;
+        SaveSession();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _objRef = DotNetObjectReference.Create(this);
+            await TryRestoreSessionAsync();
+        }
+        if (_pdfLoaded)
+        {
+            await JSRuntime.InvokeVoidAsync("enableDragForOverlays", "pdfViewer", _objRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnOverlayMoved(string id, double xScreen, double yScreen)
+    {
+        var t = _textElements.FirstOrDefault(z => z.Id == id);
+        if (t != null)
+        {
+            t.XScreen = xScreen; t.YScreen = yScreen;
+            if (_canvasPageHeight > 0)
+            {
+                t.Bounds.X = xScreen / _canvasScale;
+                t.Bounds.Y = _canvasPageHeight - (yScreen / _canvasScale) - t.Bounds.Height;
+            }
+            SaveSession(); return;
+        }
+        var i = _imageElements.FirstOrDefault(z => z.Id == id);
+        if (i != null)
+        {
+            i.XScreen = xScreen; i.YScreen = yScreen;
+            if (_canvasPageHeight > 0)
+            {
+                i.Bounds.X = xScreen / _canvasScale;
+                i.Bounds.Y = _canvasPageHeight - (yScreen / _canvasScale) - i.Bounds.Height;
+            }
+            SaveSession();
+        }
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public void OnOverlayResized(string id, double w, double h)
+    {
+        var t = _textElements.FirstOrDefault(z => z.Id == id);
+        if (t != null)
+        {
+            t.Bounds.Width = w; t.Bounds.Height = h;
+            if (_canvasPageHeight > 0)
+            {
+                t.Bounds.X = t.XScreen / _canvasScale;
+                t.Bounds.Y = _canvasPageHeight - (t.YScreen / _canvasScale) - t.Bounds.Height;
+            }
+            SaveSession(); return;
+        }
+        var i = _imageElements.FirstOrDefault(z => z.Id == id);
+        if (i != null)
+        {
+            i.Bounds.Width = w; i.Bounds.Height = h;
+            if (_canvasPageHeight > 0)
+            {
+                i.Bounds.X = i.XScreen / _canvasScale;
+                i.Bounds.Y = _canvasPageHeight - (i.YScreen / _canvasScale) - i.Bounds.Height;
+            }
+            SaveSession();
+        }
+    }
+
+    public void Dispose() => _objRef?.Dispose();
 }
