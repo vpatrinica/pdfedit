@@ -17,6 +17,10 @@
     <Routes />
     <script src="_framework/blazor.web.js"></script>
     <script>
+        // Safe image setter to prevent null reference when component not yet rendered
+        window.setImageSrc = function(id, src){
+            var el = document.getElementById(id); if(!el) return false; el.src = src; return true;
+        };
         (function loadPdfJsViaScriptTag() {
             const versions = ['3.11.174', '4.2.67'];
             const cdnPatterns = [
