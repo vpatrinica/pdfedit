@@ -105,4 +105,22 @@ public class PdfController : ControllerBase
             return NotFound();
         }
     }
+
+    [HttpGet("{documentId}/page/{pageNumber}/image")]
+    public async Task<IActionResult> GetPageImage(string documentId, int pageNumber)
+    {
+        try
+        {
+            var bytes = await _pdfService.GetPageAsImageAsync(documentId, pageNumber);
+            return File(bytes, "image/jpeg");
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest("Page number is out of range.");
+        }
+    }
 }

@@ -9,5 +9,6 @@ public interface IPdfService
     Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream, string fileName);
     Task<byte[]> ProcessPdfAsync(PdfEditRequest request);
     void CleanupDocument(string documentId);
-    Task<byte[]> GetDocumentAsync(string documentId); // Added to allow client PDF rendering
+    Task<byte[]> GetDocumentAsync(string documentId);
+    Task<byte[]> GetPageAsImageAsync(string documentId, int page);
 }

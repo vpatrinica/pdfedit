@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @using PdfEdit.Shared.Models
 @using PdfEdit.Client.Services
@@ -153,12 +153,8 @@
                     </div>
                     <div class="card-body position-relative">
                         <div id="pdfViewer" style="height: 600px; overflow:auto; border: 1px solid #ccc; position:relative;">
-                            <canvas id="pdfCanvas" style="display:@(_pdfJsFailed ? "none" : "block")"></canvas>
-                            @if (_pdfJsFailed)
-                            {
-                                <iframe id="pdfFrame" style="width:100%;height:100%;border:none;"></iframe>
-                            }
-                            <div id="overlayLayer" style="position:absolute; left:0; top:0; pointer-events:none; display:@(_pdfJsFailed ? "none" : "block")">
+                            <img id="pageImage" style="width: 100%;" />
+                            <div id="overlayLayer" style="position:absolute; left:0; top:0; pointer-events:none;">
                                 @foreach (var textElement in _textElements.Where(t=>t.PageNumber==_currentPage)
 )
                                 {
@@ -172,6 +168,14 @@
                                 {
                                     var left = imageElement.XScreen + "px"; var top = imageElement.YScreen + "px"; var w = (imageElement.Bounds.Width <=0?100:imageElement.Bounds.Width) + "px"; var h = (imageElement.Bounds.Height<=0?50:imageElement.Bounds.Height) + "px";
                                     <img class="pdf-overlay-item" data-page="@imageElement.PageNumber" data-id="@imageElement.Id" src="data:image/png;base64,@imageElement.ImageData" style="position:absolute; left:@left; top:@top; width:@w; height:@h; cursor:move; pointer-events:auto;" />
+                                }
+                                @foreach (var formField in _uploadResponse.FormFields.Where(f => f.PageNumber == _currentPage && _formFieldVisibility.ContainsKey(f.Name) && _formFieldVisibility[f.Name]))
+                                {
+                                    var left = formField.Bounds.X + "px";
+                                    var top = (_canvasPageHeight - formField.Bounds.Y - formField.Bounds.Height) + "px";
+                                    var w = formField.Bounds.Width + "px";
+                                    var h = formField.Bounds.Height + "px";
+                                    <div style="position:absolute; left:@left; top:@top; width:@w; height:@h; background:rgba(0,100,255,0.3); border: 1px solid #0064ff;"></div>
                                 }
                             </div>
                         </div>
@@ -241,13 +245,13 @@
                                         </div>
                                     </div>
                                     <div class="row mt-2 g-1">
-                                        <div class="col-6">
-                                            <label class="form-label small mb-0">X</label>
-                                            <input type="number" class="form-control form-control-sm" value="@textElement.Bounds.X" @onchange="e=>UpdateTextPosition(textElement, nameof(textElement.Bounds.X), e.Value)" />
+                                        <div class="col-12">
+                                            <label class="form-label small mb-0">X: @textElement.Bounds.X</label>
+                                            <input type="range" class="form-range" min="0" max="@_canvasPageWidth" @bind="textElement.Bounds.X" @bind:after="() => UpdateTextPosition(textElement, nameof(textElement.Bounds.X), textElement.Bounds.X)" />
                                         </div>
-                                        <div class="col-6">
-                                            <label class="form-label small mb-0">Y</label>
-                                            <input type="number" class="form-control form-control-sm" value="@textElement.Bounds.Y" @onchange="e=>UpdateTextPosition(textElement, nameof(textElement.Bounds.Y), e.Value)" />
+                                        <div class="col-12">
+                                            <label class="form-label small mb-0">Y: @textElement.Bounds.Y</label>
+                                            <input type="range" class="form-range" min="0" max="@_canvasPageHeight" @bind="textElement.Bounds.Y" @bind:after="() => UpdateTextPosition(textElement, nameof(textElement.Bounds.Y), textElement.Bounds.Y)" />
                                         </div>
                                     </div>
                                 </div>
@@ -270,8 +274,16 @@
                                         <small class="text-muted">Signature @(imageElement.Id.Substring(0,8))</small>
                                         <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveImageElement(imageElement.Id)"><i class="bi bi-trash"></i></button>
                                     </div>
-                                    <div class="mb-2 small">Pg <input type="number" style="width:55px" @bind="imageElement.PageNumber" @bind:after="OnSignatureMetaChanged" min="1" max="@_uploadResponse?.PageCount" /> W <input type="number" style="width:65px" @bind="imageElement.Bounds.Width" @bind:after="OnSignatureMetaChanged" min="10" /> H <input type="number" style="width:65px" @bind="imageElement.Bounds.Height" @bind:after="OnSignatureMetaChanged" min="10" /></div>
-                                    <div class="mb-2 small">X <input type="number" style="width:70px" value="@imageElement.Bounds.X" @onchange="e=>UpdateImagePosition(imageElement, nameof(imageElement.Bounds.X), e.Value)" /> Y <input type="number" style="width:70px" value="@imageElement.Bounds.Y" @onchange="e=>UpdateImagePosition(imageElement, nameof(imageElement.Bounds.Y), e.Value)" /></div>
+                                    <div class="row mt-2 g-1">
+                                        <div class="col-12">
+                                            <label class="form-label small mb-0">X: @imageElement.Bounds.X</label>
+                                            <input type="range" class="form-range" min="0" max="@_canvasPageWidth" @bind="imageElement.Bounds.X" @bind:after="() => UpdateImagePosition(imageElement, nameof(imageElement.Bounds.X), imageElement.Bounds.X)" />
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label small mb-0">Y: @imageElement.Bounds.Y</label>
+                                            <input type="range" class="form-range" min="0" max="@_canvasPageHeight" @bind="imageElement.Bounds.Y" @bind:after="() => UpdateImagePosition(imageElement, nameof(imageElement.Bounds.Y), imageElement.Bounds.Y)" />
+                                        </div>
+                                    </div>
                                     <div class="mb-1 small">Scale (@imageElement.ScalePercent%)
                                         <input type="range" min="10" max="400" step="5" @bind="imageElement.ScalePercent" @bind:after="() => ApplySignatureScale(imageElement)" class="form-range" />
                                     </div>
@@ -289,7 +301,12 @@
                             @foreach (var f in _uploadResponse.FormFields)
                             {
                                 <div class="mb-2">
-                                    <label class="form-label small mb-1">@f.Name (@f.Type)</label>
+                                    <div class="d-flex justify-content-between">
+                                        <label class="form-label small mb-1">@f.Name (@f.Type) - Pg @f.PageNumber</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="_formFieldVisibility[f.Name]">
+                                        </div>
+                                    </div>
                                     @if (f.Type == PdfFieldType.Text)
                                     {
                                         <input class="form-control form-control-sm" @bind="f.Value" @bind:after="SaveSession" />
@@ -323,20 +340,18 @@
     private bool _restoredSession = false;
     private bool _restoreAttempted = false;
     private InputFile? _signatureFileInput;
+    private DotNetObjectReference<Home>? _objRef;
 
     private List<RichTextElement> _textElements = new();
     private List<SignatureImageElement> _imageElements = new();
-    private DotNetObjectReference<Home>? _objRef;
-    private bool _pdfJsFailed = false;
-
-    private double _canvasScale = 1;
+    private Dictionary<string, bool> _formFieldVisibility = new();
+    private double _canvasPageWidth = 0;
     private double _canvasPageHeight = 0;
     private int _currentPage = 1;
     private double _viewerScale = 1.15;
 
     public class RichTextElement : PdfTextElement { public double XScreen { get; set; } public double YScreen { get; set; } }
     public class SignatureImageElement : PdfImageElement { public double XScreen { get; set; } public double YScreen { get; set; } public double BaseWidth { get; set; } public double BaseHeight { get; set; } public int ScalePercent { get; set; } = 100; }
-    private class CanvasInfo { public double width { get; set; } public double height { get; set; } public double scale { get; set; } }
 
     private async Task TryRestoreSessionAsync()
     {
@@ -366,6 +381,10 @@
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             _uploadResponse = JsonSerializer.Deserialize<PdfUploadResponse>(root.GetProperty("upload").GetRawText());
+            if (_uploadResponse != null)
+            {
+                _formFieldVisibility = _uploadResponse.FormFields.ToDictionary(f => f.Name, f => true);
+            }
             _textElements = JsonSerializer.Deserialize<List<RichTextElement>>(root.GetProperty("texts").GetRawText()) ?? new();
             _imageElements = JsonSerializer.Deserialize<List<SignatureImageElement>>(root.GetProperty("images").GetRawText()) ?? new();
             _originalPdfBase64 = base64;
@@ -398,6 +417,7 @@
             if (serverResp != null)
             {
                 _uploadResponse = serverResp;
+                _formFieldVisibility = _uploadResponse.FormFields.ToDictionary(f => f.Name, f => true);
                 _uploadStatus = "Server metadata loaded";
             }
             else
@@ -428,51 +448,22 @@
         await LoadPdfViewer();
     }
 
-    private void ExitEdit() { _pdfLoaded = false; _pdfJsFailed = false; _isRendering = false; StateHasChanged(); }
+    private void ExitEdit() { _pdfLoaded = false; _isRendering = false; StateHasChanged(); }
 
     private void Reset()
     {
         if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id);
-        _uploadResponse = null; _pdfLoaded = false; _textElements.Clear(); _imageElements.Clear(); _errorMessage = string.Empty; _uploadStatus = string.Empty; _pdfJsFailed = false; _originalPdfBase64 = null; _restoredSession = false; StateHasChanged();
+        _uploadResponse = null; _pdfLoaded = false; _textElements.Clear(); _imageElements.Clear(); _errorMessage = string.Empty; _uploadStatus = string.Empty; _originalPdfBase64 = null; _restoredSession = false; StateHasChanged();
     }
 
     private async Task LoadPdfViewer()
     {
-        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
-        try
-        {
-            _isRendering = true; _pdfJsFailed = false; StateHasChanged();
-            await JSRuntime.InvokeVoidAsync("renderPdfPage", _originalPdfBase64, "pdfCanvas", _currentPage, _viewerScale);
-            await Task.Delay(200);
-            await SyncScreenPositionsFromPdf();
-            var info = await JSRuntime.InvokeAsync<CanvasInfo>("getCanvasInfo", "pdfCanvas");
-            _canvasScale = info.scale == 0 ? 1 : info.scale; _canvasPageHeight = info.height;
-        }
-        catch (Exception ex)
-        {
-            _pdfJsFailed = true; _errorMessage = $"Render fallback: {ex.Message}"; Logger.LogError(ex, "Render PDF failed");
-            try { await JSRuntime.InvokeVoidAsync("showPdf", _originalPdfBase64); } catch { }
-        }
-        finally { _isRendering = false; StateHasChanged(); }
-    }
-
-    private async Task SyncScreenPositionsFromPdf()
-    {
-        try
-        {
-            var info = await JSRuntime.InvokeAsync<CanvasInfo>("getCanvasInfo", "pdfCanvas");
-            _canvasScale = info.scale == 0 ? 1 : info.scale; _canvasPageHeight = info.height;
-            double scale = _canvasScale; double pageHeight = _canvasPageHeight;
-            foreach (var t in _textElements)
-            {
-                t.XScreen = t.Bounds.X * scale; t.YScreen = (pageHeight - t.Bounds.Y - t.Bounds.Height) * scale;
-            }
-            foreach (var i in _imageElements)
-            {
-                i.XScreen = i.Bounds.X * scale; i.YScreen = (pageHeight - i.Bounds.Y - i.Bounds.Height) * scale;
-            }
-        }
-        catch (Exception ex) { Logger.LogDebug(ex, "SyncScreenPositionsFromPdf failed"); }
+        if (_uploadResponse == null) return;
+        _isRendering = true;
+        StateHasChanged();
+        await RenderCurrentPage();
+        _isRendering = false;
+        StateHasChanged();
     }
 
     private void AddTextBox()
@@ -550,17 +541,41 @@
     private bool GetCheckboxValue(PdfFormField field) => !string.IsNullOrEmpty(field.Value) && field.Value.ToLower() != "false" && field.Value != "0";
     private void SetCheckboxValue(PdfFormField field, bool value) { field.Value = value ? "true" : "false"; }
 
-    private void PrevPage() { if (_currentPage > 1) { _currentPage--; RenderCurrentPage(); } }
-    private void NextPage() { if (_uploadResponse != null && _currentPage < _uploadResponse.PageCount) { _currentPage++; RenderCurrentPage(); } }
-    private async void RenderCurrentPage() { if (string.IsNullOrEmpty(_originalPdfBase64) || _uploadResponse == null) return; await JSRuntime.InvokeVoidAsync("renderPdfPage", _originalPdfBase64, "pdfCanvas", _currentPage, _viewerScale); await SyncScreenPositionsFromPdf(); StateHasChanged(); }
+    private async Task PrevPage() { if (_currentPage > 1) { _currentPage--; await RenderCurrentPage(); } }
+    private async Task NextPage() { if (_uploadResponse != null && _currentPage < _uploadResponse.PageCount) { _currentPage++; await RenderCurrentPage(); } }
+    private async Task RenderCurrentPage()
+    {
+        if (_uploadResponse == null) return;
+        var imageUrl = $"api/pdf/{_uploadResponse.Id}/page/{_currentPage}/image";
+        await JSRuntime.InvokeVoidAsync("eval", $"document.getElementById('pageImage').src = '{imageUrl}'");
+        await Task.Delay(500); // Allow time for image to load
+        _canvasPageWidth = await JSRuntime.InvokeAsync<double>("getImageWidth", "pageImage");
+        _canvasPageHeight = await JSRuntime.InvokeAsync<double>("getImageHeight", "pageImage");
+        UpdateScreenPositions();
+        StateHasChanged();
+    }
+
+    private void UpdateScreenPositions()
+    {
+        if (_canvasPageHeight <= 0) return;
+        foreach (var t in _textElements)
+        {
+            t.XScreen = t.Bounds.X;
+            t.YScreen = _canvasPageHeight - t.Bounds.Y - t.Bounds.Height;
+        }
+        foreach (var i in _imageElements)
+        {
+            i.XScreen = i.Bounds.X;
+            i.YScreen = _canvasPageHeight - i.Bounds.Y - i.Bounds.Height;
+        }
+    }
 
     private void UpdateTextPosition(RichTextElement t, string which, object? val)
     {
         if (double.TryParse(val?.ToString(), out var num))
         {
             if (which.EndsWith("X")) t.Bounds.X = num; else t.Bounds.Y = num;
-            t.XScreen = t.Bounds.X * _canvasScale;
-            t.YScreen = (_canvasPageHeight - t.Bounds.Y - t.Bounds.Height) * _canvasScale;
+            UpdateScreenPositions();
             SaveSession(); StateHasChanged();
         }
     }
@@ -569,7 +584,7 @@
         if (double.TryParse(val?.ToString(), out var num))
         {
             if (which.EndsWith("X")) i.Bounds.X = num; else i.Bounds.Y = num;
-            i.XScreen = i.Bounds.X * _canvasScale; i.YScreen = (_canvasPageHeight - i.Bounds.Y - i.Bounds.Height) * _canvasScale;
+            UpdateScreenPositions();
             SaveSession(); StateHasChanged();
         }
     }
@@ -581,8 +596,7 @@
         var factor = sig.ScalePercent / 100.0;
         sig.Bounds.Width = sig.BaseWidth * factor;
         sig.Bounds.Height = sig.BaseHeight * factor;
-        sig.XScreen = sig.Bounds.X * _canvasScale;
-        sig.YScreen = (_canvasPageHeight - sig.Bounds.Y - sig.Bounds.Height) * _canvasScale;
+        UpdateScreenPositions();
         SaveSession();
     }
 
@@ -606,22 +620,16 @@
         if (t != null)
         {
             t.XScreen = xScreen; t.YScreen = yScreen;
-            if (_canvasPageHeight > 0)
-            {
-                t.Bounds.X = xScreen / _canvasScale;
-                t.Bounds.Y = _canvasPageHeight - (yScreen / _canvasScale) - t.Bounds.Height;
-            }
+            t.Bounds.X = xScreen;
+            t.Bounds.Y = _canvasPageHeight - yScreen - t.Bounds.Height;
             SaveSession(); return;
         }
         var i = _imageElements.FirstOrDefault(z => z.Id == id);
         if (i != null)
         {
             i.XScreen = xScreen; i.YScreen = yScreen;
-            if (_canvasPageHeight > 0)
-            {
-                i.Bounds.X = xScreen / _canvasScale;
-                i.Bounds.Y = _canvasPageHeight - (yScreen / _canvasScale) - i.Bounds.Height;
-            }
+            i.Bounds.X = xScreen;
+            i.Bounds.Y = _canvasPageHeight - yScreen - i.Bounds.Height;
             SaveSession();
         }
         await Task.CompletedTask;
@@ -634,22 +642,16 @@
         if (t != null)
         {
             t.Bounds.Width = w; t.Bounds.Height = h;
-            if (_canvasPageHeight > 0)
-            {
-                t.Bounds.X = t.XScreen / _canvasScale;
-                t.Bounds.Y = _canvasPageHeight - (t.YScreen / _canvasScale) - t.Bounds.Height;
-            }
+            t.Bounds.X = t.XScreen;
+            t.Bounds.Y = _canvasPageHeight - t.YScreen - t.Bounds.Height;
             SaveSession(); return;
         }
         var i = _imageElements.FirstOrDefault(z => z.Id == id);
         if (i != null)
         {
             i.Bounds.Width = w; i.Bounds.Height = h;
-            if (_canvasPageHeight > 0)
-            {
-                i.Bounds.X = i.XScreen / _canvasScale;
-                i.Bounds.Y = _canvasPageHeight - (i.YScreen / _canvasScale) - i.Bounds.Height;
-            }
+            i.Bounds.X = i.XScreen;
+            i.Bounds.Y = _canvasPageHeight - i.YScreen - i.Bounds.Height;
             SaveSession();
         }
     }

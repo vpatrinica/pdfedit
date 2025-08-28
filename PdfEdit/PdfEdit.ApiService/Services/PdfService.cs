@@ -12,6 +12,8 @@ using iText.Layout.Element;
 using iText.Layout.Properties;
 using Microsoft.Extensions.Logging;
 using iText.Forms.Fields;
+using iText.Kernel.Geom;
+using iText.Pdf.Devices;
 
 namespace PdfEdit.Api.Services;
 
@@ -118,6 +120,34 @@ public class PdfService : IPdfService
             throw new FileNotFoundException("Document not found", documentId);
         await Task.CompletedTask;
         return bytes;
+    }
+
+    public async Task<byte[]> GetPageAsImageAsync(string documentId, int pageNumber)
+    {
+        if (!_documents.TryGetValue(documentId, out var pdfBytes))
+        {
+            throw new FileNotFoundException("Document not found", documentId);
+        }
+
+        using var reader = new PdfReader(new MemoryStream(pdfBytes));
+        using var pdfDoc = new PdfDocument(reader);
+
+        if (pageNumber < 1 || pageNumber > pdfDoc.GetNumberOfPages())
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number is out of range.");
+        }
+
+        var page = pdfDoc.GetPage(pageNumber);
+        var pageSize = page.GetPageSize();
+
+        var converter = new PdfDraw();
+        var image = converter.PageToImage(page);
+
+        using var ms = new MemoryStream();
+        image.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+        await Task.CompletedTask;
+        return ms.ToArray();
     }
 
     private PdfEdit.Shared.Models.PdfFormField? ConvertToFormField(string name, iText.Forms.Fields.PdfFormField field)
