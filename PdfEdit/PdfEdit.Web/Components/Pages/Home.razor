@@ -13,8 +13,6 @@
 <PageTitle>PDF Editor</PageTitle>
 
 <div class="container-fluid">
-    <!-- ...existing upload / details blocks unchanged above -->
-
     @if (_uploadResponse == null)
     {
         <!-- Upload view -->
@@ -40,7 +38,6 @@
     }
     else if (!_pdfLoaded)
     {
-        <!-- Post-upload summary (unchanged content trimmed) -->
         <div class="row">
             <div class="col-lg-7">
                 <div class="card mb-3">
@@ -54,8 +51,6 @@
                     <div class="card-body">
                         <p class="mb-1"><strong>Pages:</strong> @_uploadResponse?.PageCount</p>
                         <p class="mb-1"><strong>Form Fields:</strong> @_uploadResponse?.FormFields.Count</p>
-                        @if (_uploadResponse?.FormFields.Any() == true)
-                        { <div class="small text-muted mb-2">Fields listed on the right.</div> }
                         <div class="row g-2">
                             <div class="col-sm-6">
                                 <label class="form-label small mb-1">Paper Size</label>
@@ -71,13 +66,12 @@
                 @if (!string.IsNullOrEmpty(_errorMessage)) { <div class="alert alert-danger">@_errorMessage</div> }
             </div>
             <div class="col-lg-5">
-                <!-- details list trimmed -->
                 <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span class="fw-semibold">Document Details</span><span class="badge bg-info text-dark">Ready (Local)</span></div><div class="card-body small" style="max-height:300px; overflow:auto;">
                     <dl class="row mb-0">
-                        <dt class="col-sm-5">Session Id</dt><dd class="col-sm-7 text-break">@_uploadResponse.Id</dd>
-                        <dt class="col-sm-5">File Name</dt><dd class="col-sm-7 text-break">@_uploadResponse.FileName</dd>
-                        <dt class="col-sm-5">Pages</dt><dd class="col-sm-7">@_uploadResponse.PageCount</dd>
-                        <dt class="col-sm-5">Form Fields</dt><dd class="col-sm-7">@_uploadResponse.FormFields.Count</dd>
+                        <dt class="col-sm-5">Session Id</dt><dd class="col-sm-7 text-break">@_uploadResponse!.Id</dd>
+                        <dt class="col-sm-5">File Name</dt><dd class="col-sm-7 text-break">@_uploadResponse!.FileName</dd>
+                        <dt class="col-sm-5">Pages</dt><dd class="col-sm-7">@_uploadResponse!.PageCount</dd>
+                        <dt class="col-sm-5">Form Fields</dt><dd class="col-sm-7">@_uploadResponse!.FormFields.Count</dd>
                     </dl>
                 </div></div>
             </div>
@@ -85,107 +79,41 @@
     }
     else
     {
-        <!-- Editor view -->
         <div class="row">
             <div class="col-md-8">
+                <!-- Single always-visible preview card -->
                 <div class="card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">@_uploadResponse?.FileName</h5>
+                    <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
                         <div class="d-flex align-items-center flex-wrap">
-                            <button class="btn btn-outline-secondary me-2" @onclick="ExitEdit" disabled="@_isProcessing">Back</button>
+                            <h5 class="mb-0 me-3">@_uploadResponse?.FileName</h5>
                             <div class="btn-group me-3" role="group">
                                 <button class="btn btn-sm btn-outline-primary" @onclick="PrevPage" disabled="@(_currentPage<=1)"><i class="bi bi-chevron-left"></i></button>
                                 <span class="btn btn-sm btn-light disabled">Pg @_currentPage / @_uploadResponse?.PageCount</span>
                                 <button class="btn btn-sm btn-outline-primary" @onclick="NextPage" disabled="@(_uploadResponse==null || _currentPage>=_uploadResponse.PageCount)"><i class="bi bi-chevron-right"></i></button>
                             </div>
-                            <button class="btn btn-primary me-2" @onclick="AddTextBox" disabled="@_isProcessing"><i class="bi bi-type"></i> Add Text</button>
-                            <button class="btn btn-secondary me-2" @onclick="UploadSignature" disabled="@_isProcessing"><i class="bi bi-file-image"></i> Add Signature</button>
-                            <button class="btn btn-info me-2" @onclick="ShowPreview" disabled="@_isProcessing"><i class="bi bi-eye"></i> Preview</button>
-                            <button class="btn btn-success" @onclick="SaveAndDownload" disabled="@_isProcessing">
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="AddTextBox" disabled="@_isProcessing"><i class="bi bi-type"></i> Text</button>
+                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="UploadSignature" disabled="@_isProcessing"><i class="bi bi-file-image"></i> Signature</button>
+                            <button class="btn btn-sm btn-success" @onclick="SaveAndDownload" disabled="@_isProcessing">
                                 @if (_isProcessing) { <span class="spinner-border spinner-border-sm me-2" role="status"></span> }
-                                <i class="bi bi-download"></i> Save & Download
+                                <i class="bi bi-download"></i> Save
                             </button>
                         </div>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ExitEdit" disabled="@_isProcessing">Back</button>
                     </div>
-                    <div class="card-body position-relative">
-                        <div class="small mb-2">Canvas: @_canvasPageWidth x @_canvasPageHeight (scale X:@ScaleX.ToString("0.00") Y:@ScaleY.ToString("0.00")) Page pts: @_pageWidthPoints x @_pageHeightPoints</div>
-                        <div id="pdfViewer" style="height: 600px; overflow:auto; border: 1px solid #ccc; position:relative;">
-                            <canvas id="pdfCanvas" style="width:100%; display:block;"></canvas>
-                            <div id="overlayLayer" style="position:absolute; left:0; top:0; pointer-events:none;">
-                                @foreach (var textElement in _textElements.Where(t=>t.PageNumber==_currentPage))
-                                {
-                                    var left = (textElement.Bounds.X*ScaleX) + "px"; 
-                                    var top = (_canvasPageHeight - (textElement.Bounds.Y + textElement.Bounds.Height)*ScaleY) + "px"; 
-                                    var fs = textElement.FontSize + "px"; 
-                                    var w = (Math.Max(5,textElement.Bounds.Width)*ScaleX) + "px"; 
-                                    var h = (Math.Max(5,textElement.Bounds.Height)*ScaleY) + "px";
-                                    <div class="pdf-overlay-item border rounded px-1" data-page="@textElement.PageNumber" data-id="@textElement.Id" style="position:absolute; left:@left; top:@top; width:@w; height:@h; font-size:@fs; color:@textElement.Color; background:rgba(255,255,255,0.4); cursor:move; pointer-events:auto;">@textElement.Text</div>
-                                }
-                                @foreach (var imageElement in _imageElements.Where(i=>i.PageNumber==_currentPage))
-                                {
-                                    var left = (imageElement.Bounds.X*ScaleX) + "px"; 
-                                    var top = (_canvasPageHeight - (imageElement.Bounds.Y + imageElement.Bounds.Height)*ScaleY) + "px"; 
-                                    var w = (Math.Max(5,imageElement.Bounds.Width)*ScaleX) + "px"; 
-                                    var h = (Math.Max(5,imageElement.Bounds.Height)*ScaleY) + "px";
-                                    <img class="pdf-overlay-item" data-page="@imageElement.PageNumber" data-id="@imageElement.Id" src="data:image/png;base64,@imageElement.ImageData" style="position:absolute; left:@left; top:@top; width:@w; height:@h; cursor:move; pointer-events:auto;" />
-                                }
-                                @if (_uploadResponse != null && _canvasPageHeight>0 && _canvasPageWidth>0)
-                                {
-                                    foreach (var f in _uploadResponse.FormFields.Where(f => f.PageNumber == _currentPage && _formFieldVisibility.ContainsKey(f.Name) && _formFieldVisibility[f.Name]))
-                                    {
-                                        var active = f.Name == _activeFieldName;
-                                        var left = (f.Bounds.X*ScaleX) + "px";
-                                        var top = (_canvasPageHeight - (f.Bounds.Y + f.Bounds.Height)*ScaleY) + "px";
-                                        var w = (f.Bounds.Width*ScaleX) + "px";
-                                        var h = (f.Bounds.Height*ScaleY) + "px";
-                                        <div class="form-field-box @(active?"active-field":"")" style="position:absolute; left:@left; top:@top; width:@w; height:@h; border:2px solid @(active?"#ff5722":"#0064ff"); background:rgba(0,100,255,0.15);"></div>
-                                    }
-
-                                    if (!string.IsNullOrEmpty(_activeFieldName))
-                                    {
-                                        var af = _uploadResponse.FormFields.FirstOrDefault(x=>x.Name==_activeFieldName);
-                                        if (af != null && af.PageNumber == _currentPage)
-                                        {
-                                            var r = 5; // radius in pixels
-                                            var cxScreen = (af.Bounds.X + af.Bounds.Width / 2.0) * ScaleX; // center x in screen
-                                            var cyScreen = _canvasPageHeight - (af.Bounds.Y + af.Bounds.Height / 2.0) * ScaleY; // center y in screen
-                                            var circleLeft = (cxScreen - r) + "px";
-                                            var circleTop = (cyScreen - r) + "px";
-                                            var diameter = (r*2) + "px";
-                                            <div class="field-anchor" style="position:absolute; left:@circleLeft; top:@circleTop; width:@diameter; height:@diameter; border:2px solid #ff5722; border-radius:50%; background:rgba(255,87,34,0.25);"></div>
-                                        }
-                                    }
-                                }
-                            </div>
-                        </div>
-                        @if (_isRendering)
-                        {
-                            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background:rgba(255,255,255,0.6);"><div class="spinner-border" role="status"></div></div>
-                        }
-                    </div>
-                </div>
-                @if (_showPreview)
-                {
-                    <div class="card mb-3">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Preview (Page @_currentPage)</h5>
-                            <button class="btn-close" @onclick="()=>_showPreview=false"></button>
-                        </div>
-                        <div class="card-body">
-                            <div id="pdfPreviewViewer" style="height: 400px; overflow:auto; border: 1px solid #ccc; position:relative;">
-                                <canvas id="pdfPreviewCanvas" style="width:100%; display:block;"></canvas>
-                            </div>
+                    <div class="card-body">
+                        <div class="small text-muted mb-2">Automatic preview updates after changes.</div>
+                        <div id="pdfPreviewViewer" style="height: 650px; overflow:auto; border: 1px solid #ccc; position:relative;">
+                            <canvas id="pdfPreviewCanvas" style="width:100%; display:block;"></canvas>
                             @if (_isPreviewing)
                             {
-                                <div class="d-flex align-items-center mt-2"><div class="spinner-border spinner-border-sm me-2" role="status"></div><span>Generating preview...</span></div>
+                                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background:rgba(255,255,255,.6);"><div class="spinner-border" role="status"></div></div>
                             }
                         </div>
+                        @if (!string.IsNullOrEmpty(_errorMessage)) { <div class="alert alert-danger mt-3 mb-0">@_errorMessage</div> }
                     </div>
-                }
-                @if (!string.IsNullOrEmpty(_errorMessage)) { <div class="alert alert-danger">@_errorMessage</div> }
+                </div>
             </div>
             <div class="col-md-4">
-                <!-- Text Elements (current page only) -->
                 @if (_textElements.Any(t=>t.PageNumber==_currentPage))
                 {
                     <div class="card mb-3">
@@ -204,23 +132,22 @@
                                             <button class="btn btn-sm btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveTextElement(textElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
-                                    <input class="form-control form-control-sm mb-1" @bind="textElement.Text" @bind:after="SaveSession" />
+                                    <input class="form-control form-control-sm mb-1" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                     <div class="row g-1 mb-1">
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="SaveSession" /></div>
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="SaveSession" /></div>
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="SaveSession" /></div>
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
                                     </div>
                                     <div class="row g-1 mb-1">
-                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="()=>UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X)" /></div>
-                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="()=>UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y)" /></div>
+                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
                                     </div>
-                                    <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="SaveSession" />
+                                    <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                 </div>
                             }
                         </div>
                     </div>
                 }
-                <!-- Signature Elements (current page only) -->
                 @if (_imageElements.Any(i=>i.PageNumber==_currentPage))
                 {
                     <div class="card mb-3">
@@ -240,36 +167,34 @@
                                         </div>
                                     </div>
                                     <div class="row g-1 mb-1">
-                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="()=>UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X)" /></div>
-                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="()=>UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y)" /></div>
+                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
                                     </div>
                                     <div class="mb-1">
-                                        <label class="form-label small">Height (px)</label>
-                                        <input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height*ScaleY)" @onchange="(e=>OnImageHeightChanged(imageElement,e))" />
-                                        <div class="small text-muted">Aspect kept. W:@Math.Round(imageElement.Bounds.Width*ScaleX) H:@Math.Round(imageElement.Bounds.Height*ScaleY)</div>
+                                        <label class="form-label small">Height (pts)</label>
+                                        <input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height)" @onchange="(e=>{OnImageHeightChanged(imageElement,e); QueuePreviewUpdate();})" />
+                                        <div class="small text-muted">W:@Math.Round(imageElement.Bounds.Width) H:@Math.Round(imageElement.Bounds.Height)</div>
                                     </div>
                                 </div>
                             }
                         </div>
                     </div>
                 }
-                <!-- Form Fields (filtered to current page) -->
                 @if (_uploadResponse?.FormFields.Any(f=>f.PageNumber==_currentPage) == true)
                 {
                     <div class="card mb-3"><div class="card-header"><h5 class="mb-0">Form Fields (Pg @_currentPage)</h5></div><div class="card-body" style="max-height:250px;overflow:auto;">
                         @foreach (var f in _uploadResponse.FormFields.Where(f=>f.PageNumber==_currentPage))
                         {
+                            var centerX = f.Bounds.X + f.Bounds.Width/2.0; var centerY = f.Bounds.Y + f.Bounds.Height/2.0;
                             <div class="mb-2 field-item @(f.Name==_activeFieldName?"selected":"")" @onclick="() => SelectFormField(f)">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <label class="form-label small mb-1">@f.Name (@f.Type)</label>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" @bind="_formFieldVisibility[f.Name]" />
-                                    </div>
+                                    <span class="badge bg-light text-dark border small">@centerX.ToString("0.#"), @centerY.ToString("0.#")</span>
                                 </div>
                                 @if (f.Type == PdfFieldType.Text)
-                                { <input class="form-control form-control-sm" @bind="f.Value" @bind:after="SaveSession" /> }
+                                { <input class="form-control form-control-sm" @bind="f.Value" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /> }
                                 else if (f.Type == PdfFieldType.Checkbox)
-                                { <input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(f)" @onchange="@(e=> { var v = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var px) && px; SetCheckboxValue(f,v); SaveSession(); StateHasChanged(); })" /> }
+                                { <input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(f)" @onchange="@(e=> { var v = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var px) && px; SetCheckboxValue(f,v); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); })" /> }
                             </div>
                         }
                     </div></div>
@@ -285,15 +210,13 @@
     private record PaperSize(string Name,double Width,double Height);
     private List<PaperSize> _paperSizes = new(){ new("A4",595,842), new("Letter",612,792), new("Legal",612,1008)};
     private string _selectedPaperName = "A4";
-    private double _pageWidthPoints = 595; // selected paper width in points
-    private double _pageHeightPoints = 842; // selected paper height in points
+    private double _pageWidthPoints = 595;
+    private double _pageHeightPoints = 842;
 
     private PdfUploadResponse? _uploadResponse;
     private bool _pdfLoaded = false;
     private bool _isUploading = false;
     private bool _isProcessing = false;
-    private bool _isRendering = false;
-    private bool _showPreview = false;
     private bool _isPreviewing = false;
     private string _errorMessage = string.Empty;
     private string _uploadStatus = string.Empty;
@@ -301,71 +224,24 @@
     private bool _restoredSession = false;
     private bool _restoreAttempted = false;
     private InputFile? _signatureFileInput;
-    private DotNetObjectReference<Home>? _objRef;
 
     private List<RichTextElement> _textElements = new();
     private List<SignatureImageElement> _imageElements = new();
-    private Dictionary<string, bool> _formFieldVisibility = new();
-    private double _canvasPageWidth = 0;
-    private double _canvasPageHeight = 0;
     private int _currentPage = 1;
-    private double _viewerScale = 1.15;
-    private string? _activeFieldName;
-    private string? _activeTextId; private string? _activeImageId;
+    private string? _activeFieldName; private string? _activeTextId; private string? _activeImageId;
+    private CancellationTokenSource? _previewCts;
 
     public class RichTextElement : PdfTextElement { }
     public class SignatureImageElement : PdfImageElement { public double BaseWidth { get; set; } public double BaseHeight { get; set; } public double ScaleFactor { get; set; } = 1.0; }
-
-    private double ScaleX => _pageWidthPoints > 0 && _canvasPageWidth>0 ? _canvasPageWidth / _pageWidthPoints : 1.0;
-    private double ScaleY => _pageHeightPoints > 0 && _canvasPageHeight>0 ? _canvasPageHeight / _pageHeightPoints : 1.0;
 
     private void ApplySelectedPaperSize()
     {
         var ps = _paperSizes.FirstOrDefault(p=>p.Name==_selectedPaperName) ?? _paperSizes[0];
         _pageWidthPoints = ps.Width; _pageHeightPoints = ps.Height;
-        // clamp existing elements
         foreach(var t in _textElements){ t.Bounds.X = Clamp(t.Bounds.X,0,_pageWidthPoints - t.Bounds.Width); t.Bounds.Y = Clamp(t.Bounds.Y,0,_pageHeightPoints - t.Bounds.Height);}        
         foreach(var i in _imageElements){ i.Bounds.X = Clamp(i.Bounds.X,0,_pageWidthPoints - i.Bounds.Width); i.Bounds.Y = Clamp(i.Bounds.Y,0,_pageHeightPoints - i.Bounds.Height);}        
         StateHasChanged();
-    }
-
-    private async Task TryRestoreSessionAsync()
-    {
-        if (_restoreAttempted) return; _restoreAttempted = true;
-        try
-        {
-            var lastId = await JSRuntime.InvokeAsync<string?>("getLastSessionId");
-            if (!string.IsNullOrEmpty(lastId))
-            {
-                var metaJson = await JSRuntime.InvokeAsync<string?>("loadMetadata", lastId);
-                var pdfBase = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", lastId);
-                if (!string.IsNullOrEmpty(metaJson) && !string.IsNullOrEmpty(pdfBase))
-                {
-                    RestoreFromMetadata(metaJson, pdfBase);
-                    _restoredSession = true;
-                    StateHasChanged();
-                }
-            }
-        }
-        catch (Exception ex) { Logger.LogWarning(ex, "Failed to restore session"); }
-    }
-
-    private void RestoreFromMetadata(string json, string base64)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            _uploadResponse = JsonSerializer.Deserialize<PdfUploadResponse>(root.GetProperty("upload").GetRawText());
-            if (_uploadResponse != null)
-            {
-                _formFieldVisibility = _uploadResponse.FormFields.ToDictionary(f => f.Name, f => true);
-            }
-            _textElements = JsonSerializer.Deserialize<List<RichTextElement>>(root.GetProperty("texts").GetRawText()) ?? new();
-            _imageElements = JsonSerializer.Deserialize<List<SignatureImageElement>>(root.GetProperty("images").GetRawText()) ?? new();
-            _originalPdfBase64 = base64;
-        }
-        catch (Exception ex) { Logger.LogWarning(ex, "Failed to parse session metadata"); }
+        QueuePreviewUpdate();
     }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
@@ -377,41 +253,25 @@
             using var ms = new MemoryStream();
             await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
             _originalPdfBase64 = Convert.ToBase64String(ms.ToArray());
-            PdfUploadResponse? serverResp = null;
-            try { serverResp = await PdfApiService.UploadPdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server upload (metadata) failed"); }
-            if (serverResp != null)
-            {
-                _uploadResponse = serverResp;
-                _formFieldVisibility = _uploadResponse.FormFields.ToDictionary(f => f.Name, f => true);
-                _uploadStatus = "Server metadata loaded";
-            }
-            else
-            {
-                _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 };
-                _uploadStatus = "Loaded locally (no server metadata)";
-            }
+            PdfUploadResponse? serverResp = null; try { serverResp = await PdfApiService.UploadPdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server upload (metadata) failed"); }
+            if (serverResp != null) { _uploadResponse = serverResp; _uploadStatus = "Server metadata loaded"; }
+            else { _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 }; _uploadStatus = "Loaded locally (no server metadata)"; }
             await JSRuntime.InvokeVoidAsync("savePdfToIndexedDb", _uploadResponse.Id, _originalPdfBase64);
             await JSRuntime.InvokeVoidAsync("setLastSessionId", _uploadResponse.Id);
             SaveSession();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Error reading/uploading PDF: {ex.Message}";
-            Logger.LogError(ex, "OnFileSelected failed");
-        }
+        catch (Exception ex) { _errorMessage = $"Error reading/uploading PDF: {ex.Message}"; Logger.LogError(ex, "OnFileSelected failed"); }
         finally { _isUploading = false; StateHasChanged(); }
     }
 
     private async Task BeginEdit()
     {
         if (_uploadResponse == null) return;
-        if (string.IsNullOrEmpty(_originalPdfBase64))
-            _originalPdfBase64 = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", _uploadResponse.Id);
-        _pdfLoaded = true; _currentPage = 1; await InvokeAsync(StateHasChanged);
-        await RenderCurrentPage();
+        if (string.IsNullOrEmpty(_originalPdfBase64)) _originalPdfBase64 = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", _uploadResponse.Id);
+        _pdfLoaded = true; _currentPage = 1; await InvokeAsync(StateHasChanged); QueuePreviewUpdate();
     }
 
-    private void ExitEdit() { _pdfLoaded = false; _isRendering = false; StateHasChanged(); }
+    private void ExitEdit() { _pdfLoaded = false; StateHasChanged(); }
 
     private void Reset()
     {
@@ -422,7 +282,7 @@
     private void AddTextBox()
     {
         var t = new RichTextElement { Id = Guid.NewGuid().ToString(), Text = "New Text", PageNumber = _currentPage, FontSize = 14, Color = "#000000", Bounds = new Rectangle { X = 50, Y = _pageHeightPoints - 70, Width = 200, Height = 20 } };
-        _textElements.Add(t); SaveSession(); StateHasChanged();
+        _textElements.Add(t); SaveSession(); QueuePreviewUpdate(); StateHasChanged();
     }
 
     private async Task UploadSignature() => await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()");
@@ -434,56 +294,28 @@
         {
             using var stream = file.OpenReadStream(5 * 1024 * 1024); using var ms = new MemoryStream(); await stream.CopyToAsync(ms);
             var imageData = Convert.ToBase64String(ms.ToArray());
-            var img = new SignatureImageElement { Id = Guid.NewGuid().ToString(), ImageData = imageData, PageNumber = _currentPage, Bounds = new Rectangle { X = 50, Y = _pageHeightPoints - 100 - 50, Width = 100, Height = 50 }, BaseWidth = 100, BaseHeight = 50 };
-            _imageElements.Add(img); SaveSession(); StateHasChanged();
+            var img = new SignatureImageElement { Id = Guid.NewGuid().ToString(), ImageData = imageData, PageNumber = _currentPage, Bounds = new Rectangle { X = 50, Y = _pageHeightPoints - 150, Width = 100, Height = 50 }, BaseWidth = 100, BaseHeight = 50 };
+            _imageElements.Add(img); SaveSession(); QueuePreviewUpdate(); StateHasChanged();
         }
         catch (Exception ex) { _errorMessage = $"Error uploading signature: {ex.Message}"; Logger.LogError(ex, "Signature upload"); }
     }
 
     private void OnImageHeightChanged(SignatureImageElement img, ChangeEventArgs e)
     {
-        if (double.TryParse(e.Value?.ToString(), out var newHeightPx))
+        if (double.TryParse(e.Value?.ToString(), out var newHeight))
         {
             var aspect = (img.BaseWidth > 0 && img.BaseHeight > 0) ? img.BaseWidth / img.BaseHeight : (img.Bounds.Width / img.Bounds.Height);
-            // convert pixel height to point height
-            var newHeightPts = ScaleY > 0 ? newHeightPx / ScaleY : newHeightPx;
-            newHeightPts = Math.Max(5, newHeightPts);
-            var newWidthPts = Math.Max(5, newHeightPts * aspect);
-            img.Bounds.Height = newHeightPts;
-            img.Bounds.Width = newWidthPts;
+            newHeight = Math.Max(5, newHeight);
+            var newWidth = Math.Max(5, newHeight * aspect);
+            img.Bounds.Height = newHeight; img.Bounds.Width = newWidth;
             img.Bounds.X = Clamp(img.Bounds.X, 0, _pageWidthPoints - img.Bounds.Width);
             img.Bounds.Y = Clamp(img.Bounds.Y, 0, _pageHeightPoints - img.Bounds.Height);
-            SaveSession(); StateHasChanged();
+            SaveSession(); QueuePreviewUpdate(); StateHasChanged();
         }
     }
 
-    private void RemoveTextElement(string id) { _textElements.RemoveAll(t => t.Id == id); SaveSession(); StateHasChanged(); }
-    private void RemoveImageElement(string id) { _imageElements.RemoveAll(i => i.Id == id); SaveSession(); StateHasChanged(); }
-
-    private async Task ShowPreview()
-    {
-        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
-        _showPreview = true;
-        _isPreviewing = true;
-        StateHasChanged();
-
-        await Task.Delay(50); // allow UI to render preview container
-
-        try
-        {
-            var request = new PdfEditRequest { OriginalPdfBase64 = _originalPdfBase64, FormFields = _uploadResponse.FormFields, TextElements = _textElements.Cast<PdfTextElement>().ToList(), ImageElements = _imageElements.Cast<PdfImageElement>().ToList() };
-            var response = await PdfApiService.ProcessPdfAsync(request);
-            if (response.IsSuccessStatusCode)
-            {
-                var bytes = await response.Content.ReadAsByteArrayAsync();
-                var previewPdfBase64 = Convert.ToBase64String(bytes);
-                await JSRuntime.InvokeVoidAsync("renderPdfPage", previewPdfBase64, "pdfPreviewCanvas", _currentPage, 1.0);
-            }
-            else { _errorMessage = $"Preview failed: {(int)response.StatusCode} {response.ReasonPhrase}"; }
-        }
-        catch (Exception ex) { _errorMessage = $"Preview error: {ex.Message}"; Logger.LogError(ex, "Preview PDF"); }
-        finally { _isPreviewing = false; StateHasChanged(); }
-    }
+    private void RemoveTextElement(string id) { _textElements.RemoveAll(t => t.Id == id); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); }
+    private void RemoveImageElement(string id) { _imageElements.RemoveAll(i => i.Id == id); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); }
 
     private async Task SaveAndDownload()
     {
@@ -491,24 +323,6 @@
         _isProcessing = true; _errorMessage = string.Empty; StateHasChanged();
         try
         {
-            foreach (var t in _textElements.Where(t=>t.PageNumber==_currentPage))
-            {
-                var sizeEl = await JSRuntime.InvokeAsync<JsonElement>("getOverlaySize", t.Id);
-                if (sizeEl.ValueKind == JsonValueKind.Object)
-                {
-                    if (sizeEl.TryGetProperty("w", out var wEl) && wEl.TryGetDouble(out var wv) && wv > 0) t.Bounds.Width = wv / (ScaleX==0?1:ScaleX);
-                    if (sizeEl.TryGetProperty("h", out var hEl) && hEl.TryGetDouble(out var hv) && hv > 0) t.Bounds.Height = hv / (ScaleY==0?1:ScaleY);
-                }
-            }
-            foreach (var i in _imageElements.Where(i=>i.PageNumber==_currentPage))
-            {
-                var sizeEl = await JSRuntime.InvokeAsync<JsonElement>("getOverlaySize", i.Id);
-                if (sizeEl.ValueKind == JsonValueKind.Object)
-                {
-                    if (sizeEl.TryGetProperty("w", out var wEl) && wEl.TryGetDouble(out var wv) && wv > 0) i.Bounds.Width = wv / (ScaleX==0?1:ScaleX);
-                    if (sizeEl.TryGetProperty("h", out var hEl) && hEl.TryGetDouble(out var hv) && hv > 0) i.Bounds.Height = hv / (ScaleY==0?1:ScaleY);
-                }
-            }
             var request = new PdfEditRequest { OriginalPdfBase64 = _originalPdfBase64, FormFields = _uploadResponse.FormFields, TextElements = _textElements.Cast<PdfTextElement>().ToList(), ImageElements = _imageElements.Cast<PdfImageElement>().ToList() };
             var response = await PdfApiService.ProcessPdfAsync(request);
             if (response.IsSuccessStatusCode)
@@ -533,70 +347,55 @@
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to save session"); }
     }
 
+    private void QueuePreviewUpdate()
+    {
+        if (!_pdfLoaded || _uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
+        _previewCts?.Cancel();
+        var cts = new CancellationTokenSource(); _previewCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(350, cts.Token); await InvokeAsync(UpdatePreviewAsync); } catch (TaskCanceledException) { } catch (Exception ex) { Logger.LogWarning(ex, "Preview queue failed"); }
+        });
+    }
+
+    private async Task UpdatePreviewAsync()
+    {
+        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
+        _isPreviewing = true; StateHasChanged();
+        try
+        {
+            var request = new PdfEditRequest { OriginalPdfBase64 = _originalPdfBase64, FormFields = _uploadResponse.FormFields, TextElements = _textElements.Cast<PdfTextElement>().ToList(), ImageElements = _imageElements.Cast<PdfImageElement>().ToList() };
+            var response = await PdfApiService.ProcessPdfAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var previewPdfBase64 = Convert.ToBase64String(bytes);
+                await JSRuntime.InvokeVoidAsync("renderPdfPage", previewPdfBase64, "pdfPreviewCanvas", _currentPage, 1.0);
+            }
+            else { _errorMessage = $"Preview failed: {(int)response.StatusCode} {response.ReasonPhrase}"; }
+        }
+        catch (Exception ex) { _errorMessage = $"Preview error: {ex.Message}"; Logger.LogError(ex, "Preview update"); }
+        finally { _isPreviewing = false; StateHasChanged(); }
+    }
+
     private bool GetCheckboxValue(PdfFormField field) => !string.IsNullOrEmpty(field.Value) && field.Value.ToLower() != "false" && field.Value != "0";
     private void SetCheckboxValue(PdfFormField field, bool value) { field.Value = value ? "true" : "false"; }
 
-    private async Task PrevPage() { if (_currentPage > 1) { _currentPage--; await RenderCurrentPage(); } }
-    private async Task NextPage() { if (_uploadResponse != null && _currentPage < _uploadResponse.PageCount) { _currentPage++; await RenderCurrentPage(); } }
-    private async Task RenderCurrentPage()
-    {
-        if (_uploadResponse == null || string.IsNullOrEmpty(_originalPdfBase64)) return;
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("renderPdfPage", _originalPdfBase64, "pdfCanvas", _currentPage, _viewerScale);
-            await Task.Delay(200);
-            var info = await JSRuntime.InvokeAsync<JsonElement>("getCanvasInfo", "pdfCanvas");
-            if (info.ValueKind == JsonValueKind.Object)
-            {
-                if (info.TryGetProperty("width", out var wEl) && wEl.TryGetDouble(out var wv)) _canvasPageWidth = wv;
-                if (info.TryGetProperty("height", out var hEl) && hEl.TryGetDouble(out var hv)) _canvasPageHeight = hv;
-            }
-            StateHasChanged();
-        }
-        catch (Exception ex) { Logger.LogWarning(ex, "RenderCurrentPage failed"); }
-    }
+    private void PrevPage() { if (_currentPage > 1) { _currentPage--; QueuePreviewUpdate(); } }
+    private void NextPage() { if (_uploadResponse != null && _currentPage < _uploadResponse.PageCount) { _currentPage++; QueuePreviewUpdate(); } }
 
-    private void SelectFormField(PdfFormField f)
-    {
-        _activeFieldName = f.Name;
-        if (f.PageNumber != _currentPage)
-        {
-            _currentPage = f.PageNumber;
-            _ = RenderCurrentPage();
-        }
-        else StateHasChanged();
-    }
-
+    private void SelectFormField(PdfFormField f){ _activeFieldName = f.Name; if (f.PageNumber!=_currentPage){ _currentPage=f.PageNumber; QueuePreviewUpdate(); } StateHasChanged(); }
     private void SelectTextElement(RichTextElement t){ _activeTextId = t.Id; _activeImageId=null; _activeFieldName=null; StateHasChanged(); }
     private void SelectImageElement(SignatureImageElement i){ _activeImageId = i.Id; _activeTextId=null; _activeFieldName=null; StateHasChanged(); }
 
-    public void Dispose() { _objRef?.Dispose(); }
+    public void Dispose() { _previewCts?.Cancel(); }
 
     private static double Clamp(double v, double min, double max) => v < min ? min : (v > max ? max : v);
-
-    private void UpdateImagePosition(SignatureImageElement i, string which, object? val)
-    {
-        if (double.TryParse(val?.ToString(), out var num))
-        {
-            if (which.EndsWith("X")) i.Bounds.X = Clamp(num, 0, _pageWidthPoints - Math.Max(5, i.Bounds.Width));
-            else i.Bounds.Y = Clamp(num, 0, _pageHeightPoints - Math.Max(5, i.Bounds.Height));
-            SaveSession(); StateHasChanged();
-        }
-    }
-
-    private void UpdateTextPosition(RichTextElement t, string which, object? val)
-    {
-        if (double.TryParse(val?.ToString(), out var num))
-        {
-            if (which.EndsWith("X")) t.Bounds.X = Clamp(num, 0, _pageWidthPoints - Math.Max(5, t.Bounds.Width));
-            else t.Bounds.Y = Clamp(num, 0, _pageHeightPoints - Math.Max(5, t.Bounds.Height));
-            SaveSession(); StateHasChanged();
-        }
-    }
+    private void UpdateImagePosition(SignatureImageElement i, string which, object? val){ if (double.TryParse(val?.ToString(), out var num)){ if (which.EndsWith("X")) i.Bounds.X = Clamp(num,0,_pageWidthPoints - Math.Max(5,i.Bounds.Width)); else i.Bounds.Y = Clamp(num,0,_pageHeightPoints - Math.Max(5,i.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); } }
+    private void UpdateTextPosition(RichTextElement t, string which, object? val){ if (double.TryParse(val?.ToString(), out var num)){ if (which.EndsWith("X")) t.Bounds.X = Clamp(num,0,_pageWidthPoints - Math.Max(5,t.Bounds.Width)); else t.Bounds.Y = Clamp(num,0,_pageHeightPoints - Math.Max(5,t.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); StateHasChanged(); } }
 }
 
 <style>
     .panel-selected { border-color:#ff5722 !important; box-shadow:0 0 4px rgba(255,87,34,.6); }
-    .pdf-overlay-item.selected { outline:2px solid #ff5722; }
-    .field-anchor { pointer-events:none; box-shadow:0 0 6px rgba(255,87,34,.8); }
+    .field-item.selected { border:1px solid #ff5722; background:rgba(255,87,34,.05); }
 </style>

@@ -15,11 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="itext7" Version="8.0.4" />
-    <PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.4" />
-    <PackageReference Include="Docnet.Core" Version="1.0.31" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.7" />
+    <PackageReference Include="itext7" Version="9.2.0" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.2.0" />
+    <PackageReference Include="Docnet.Core" Version="2.6.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.8" />
   </ItemGroup>
 
 </Project>
