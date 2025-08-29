@@ -14,22 +14,12 @@
 <div class="container-fluid">
     @if (_uploadResponse == null)
     {
-        <!-- Upload view unchanged except paper size hint -->
+        <!-- Upload view (simplified) -->
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card"><div class="card-body">
-                    <h5 class="card-title">Parse PDF Document</h5>
+                    <h5 class="card-title">Select PDF Document</h5>
                     <div class="mb-3"><InputFile OnChange="OnFileSelected" class="form-control" accept=".pdf" /></div>
-                    @if (!_hasDynamicPageSizes)
-                    {
-                        <div class="mb-3">
-                            <label class="form-label small mb-1">Fallback Paper Size</label>
-                            <select class="form-select form-select-sm" @bind="_selectedPaperName" @bind:after="ApplySelectedPaperSize">
-                                @foreach(var ps in _paperSizes){ <option value="@ps.Name">@ps.Name (@ps.Width x @ps.Height)</option> }
-                            </select>
-                            <div class="form-text">Will be replaced by actual per-page sizes after upload</div>
-                        </div>
-                    }
                     @if (_isUploading) { <div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div><span>Parsing PDF...</span></div> }
                     @if (!string.IsNullOrEmpty(_uploadStatus)) { <div class="small text-muted">@_uploadStatus</div> }
                     @if (!string.IsNullOrEmpty(_errorMessage)) { <div class="alert alert-danger" role="alert">@_errorMessage</div> }
@@ -37,84 +27,45 @@
             </div>
         </div>
     }
-    else if (!_pdfLoaded)
-    {
-        <!-- Initial metadata view -->
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">@_uploadResponse?.FileName</h5>
-                        <div>
-                            <button class="btn btn-primary" @onclick="BeginEdit"><i class="bi bi-play-circle"></i> Start Editing</button>
-                            <button class="btn btn-outline-secondary ms-2" @onclick="Reset">Parse Another</button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-2 mb-2">
-                            <div class="col-sm-6"><strong>Pages:</strong> @_uploadResponse?.PageCount</div>
-                            <div class="col-sm-6"><strong>Form Fields:</strong> @_uploadResponse?.FormFields.Count</div>
-                        </div>
-                        @if (_hasDynamicPageSizes)
-                        {
-                            <div class="mb-2 small">
-                                <strong>Per-Page Sizes (pts):</strong>
-                                <div class="row row-cols-2 row-cols-md-3 g-1 mt-1">
-                                    @foreach(var dim in _uploadResponse!.PageDimensions)
-                                    {
-                                        <div class="col"><span class="badge bg-light text-dark border">Pg @dim.PageNumber: @Math.Round(dim.Width) x @Math.Round(dim.Height)</span></div>
-                                    }
-                                </div>
-                            </div>
-                            <div class="small text-muted">Using actual page size when editing (auto)</div>
-                        }
-                        else
-                        {
-                            <div class="row g-2 mb-3">
-                                <div class="col-sm-6">
-                                    <label class="form-label small mb-1">Paper Size (fallback)</label>
-                                    <select class="form-select form-select-sm" @bind="_selectedPaperName" @bind:after="ApplySelectedPaperSize">
-                                        @foreach(var ps in _paperSizes){ <option value="@ps.Name">@ps.Name (@ps.Width x @ps.Height)</option> }
-                                    </select>
-                                </div>
-                                <div class="col-sm-12 small">Current Page Size: @_pageWidthPoints x @_pageHeightPoints pts</div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span class="fw-semibold">Document Details</span><span class="badge bg-info text-dark">Ready</span></div><div class="card-body small" style="max-height:300px; overflow:auto;">
-                    <dl class="row mb-0">
-                        <dt class="col-sm-5">Session Id</dt><dd class="col-sm-7 text-break">@_uploadResponse!.Id</dd>
-                        <dt class="col-sm-5">File Name</dt><dd class="col-sm-7 text-break">@_uploadResponse!.FileName</dd>
-                        <dt class="col-sm-5">Pages</dt><dd class="col-sm-7">@_uploadResponse!.PageCount</dd>
-                        <dt class="col-sm-5">Form Fields</dt><dd class="col-sm-7">@_uploadResponse!.FormFields.Count</dd>
-                    </dl>
-                </div></div>
-            </div>
-        </div>
-    }
     else
     {
-        <!-- Editing view -->
-        <div class="editor-toolbar d-flex flex-wrap align-items-center gap-2 mb-3 p-2 border rounded bg-light">
-            <button class="btn btn-sm btn-outline-secondary" @onclick="ExitEdit" disabled="@_isProcessing"><i class="bi bi-arrow-left"></i> Back</button>
-            <h5 class="m-0 flex-grow-1">@_uploadResponse?.FileName</h5>
-            <div class="btn-group me-2" role="group">
+        <!-- Editing view directly after upload -->
+        <div class="editor-toolbar d-flex flex-wrap align-items-center gap-2 mb-3 p-2 border rounded bg-light position-relative">
+            <button class="btn btn-sm btn-outline-danger" @onclick="Reset" disabled="@_isProcessing"><i class="bi bi-file-earmark-plus"></i> Parse New</button>
+            <h5 class="m-0 text-truncate" style="max-width:380px" title="@_uploadResponse?.FileName">@_uploadResponse?.FileName</h5>
+            <button class="btn btn-sm btn-outline-info" @onclick="(()=> _showInfo = !_showInfo)"><i class="bi bi-info-circle"></i> Info</button>
+            <div class="vr d-none d-md-inline mx-1" style="height:26px;"></div>
+            <div class="btn-group me-1" role="group">
                 <button class="btn btn-sm btn-outline-primary" @onclick="PrevPage" disabled="@(_currentPage<=1)"><i class="bi bi-chevron-left"></i></button>
                 <span class="btn btn-sm btn-light disabled">Pg @_currentPage / @_uploadResponse?.PageCount</span>
                 <button class="btn btn-sm btn-outline-primary" @onclick="NextPage" disabled="@(_uploadResponse==null || _currentPage>=_uploadResponse.PageCount)"><i class="bi bi-chevron-right"></i></button>
             </div>
-            <span class="small text-muted">
-                @if(_hasDynamicPageSizes){<span>Size: @Math.Round(_pageWidthPoints) x @Math.Round(_pageHeightPoints) pts (actual)</span>} else {<span>Size: @_pageWidthPoints x @_pageHeightPoints pts (fallback)</span>}
-            </span>
-            <button class="btn btn-sm btn-outline-primary" @onclick="AddTextBox" disabled="@_isProcessing"><i class="bi bi-type"></i> Text</button>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="UploadSignature" disabled="@_isProcessing"><i class="bi bi-file-image"></i> Signature</button>
-            <button class="btn btn-sm btn-success" @onclick="SaveAndDownload" disabled="@_isProcessing">
-                @if (_isProcessing) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
-                <i class="bi bi-download"></i> Save
-            </button>
+            <span class="small text-muted">Size: @Math.Round(_pageWidthPoints) x @Math.Round(_pageHeightPoints) pts</span>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-primary" @onclick="AddTextBox" disabled="@_isProcessing"><i class="bi bi-type"></i> Text</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="UploadSignature" disabled="@_isProcessing"><i class="bi bi-file-image"></i> Signature</button>
+                <button class="btn btn-sm btn-success" @onclick="SaveAndDownload" disabled="@_isProcessing">
+                    @if (_isProcessing) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
+                    <i class="bi bi-download"></i> Save
+                </button>
+            </div>
+            @if (_showInfo && _uploadResponse != null)
+            {
+                <div class="doc-info-pop card shadow-sm position-absolute" style="top:100%; left:0; margin-top:.5rem; z-index:200; width:320px;">
+                    <div class="card-header py-1 d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold small">Document Info</span>
+                        <button type="button" class="btn-close btn-sm" style="font-size:.65rem;" @onclick="(()=> _showInfo=false)"></button>
+                    </div>
+                    <div class="card-body small py-2" style="max-height:220px; overflow:auto;">
+                        <dl class="row mb-0">
+                            <dt class="col-4">Session</dt><dd class="col-8 text-break">@_uploadResponse.Id</dd>
+                            <dt class="col-4">File</dt><dd class="col-8 text-break" title="@_uploadResponse.FileName">@_uploadResponse.FileName</dd>
+                            <dt class="col-4">Pages</dt><dd class="col-8">@_uploadResponse.PageCount</dd>
+                            <dt class="col-4">Fields</dt><dd class="col-8">@_uploadResponse.FormFields.Count</dd>
+                        </dl>
+                    </div>
+                </div>
+            }
         </div>
         <div class="row g-3">
             <div class="col-lg-9">
@@ -129,87 +80,104 @@
             </div>
             <div class="col-lg-3">
                 <div class="mb-3">
-                    <h6 class="mb-2">Form Fields (Pg @_currentPage)</h6>
-                    <div class="d-flex flex-wrap gap-1 mb-2">
-                        <button class="btn btn-sm @( _fieldFilter==FieldFilter.All?"btn-primary":"btn-outline-secondary")" @onclick="(()=>ChangeFilter(FieldFilter.All))">All</button>
-                        <button class="btn btn-sm @( _fieldFilter==FieldFilter.TextOnly?"btn-primary":"btn-outline-secondary")" @onclick="(()=>ChangeFilter(FieldFilter.TextOnly))">Text</button>
-                        <button class="btn btn-sm @( _fieldFilter==FieldFilter.Checkboxes?"btn-primary":"btn-outline-secondary")" @onclick="(()=>ChangeFilter(FieldFilter.Checkboxes))">Checkbox</button>
-                    </div>
-                    <input class="form-control form-control-sm mb-2" placeholder="Filter name/group" @bind="_fieldNameFilter" />
-                    <div style="max-height:250px; overflow:auto;">
-                        @if (_uploadResponse?.FormFields.Any(f=>f.PageNumber==_currentPage) == true)
-                        {
-                            @foreach (var f in FilteredFields())
+                    <h6 class="mb-2 d-flex align-items-center justify-content-between">
+                        <span class="d-flex align-items-center gap-1"><button class="btn btn-xs btn-toggle" @onclick="(()=> _collapseFields = !_collapseFields)"><i class="bi @( _collapseFields?"bi-caret-right-fill":"bi-caret-down-fill")" style="font-size:.9rem;"></i></button>Form Fields (Pg @_currentPage)</span>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button class="btn btn-xs @( _fieldFilter==FieldFilter.All?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.All">All</button>
+                            <button class="btn btn-xs @( _fieldFilter==FieldFilter.TextOnly?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.TextOnly">Text</button>
+                            <button class="btn btn-xs @( _fieldFilter==FieldFilter.Checkboxes?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.Checkboxes">Checkbox</button>
+                        </div>
+                    </h6>
+                    @if(!_collapseFields)
+                    {
+                        <input class="form-control form-control-sm mb-2" placeholder="Filter name/group" @bind="_fieldNameFilter" />
+                        <div style="max-height:250px; overflow:auto;">
+                            @if (_uploadResponse?.FormFields.Any(f=>f.PageNumber==_currentPage) == true)
                             {
-                                <div class="mb-2 field-item @(f.Name==_activeFieldName?"selected":"")" @onclick="() => SelectFormField(f)">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <label class="form-label small mb-1 text-truncate" style="max-width:140px" title="@f.Name">@f.Name (@f.Type)</label>
-                                        <button class="btn btn-sm btn-outline-secondary" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(f))">Target</button>
+                                @foreach (var f in FilteredFields())
+                                {
+                                    <div class="mb-2 field-item @(f.Name==_activeFieldName?"selected":"")" @onclick="() => SelectFormField(f)">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <label class="form-label small mb-1 text-truncate" style="max-width:140px" title="@f.Name">@f.Name (@f.Type)</label>
+                                            <button class="btn btn-sm btn-outline-secondary p-0 px-1" title="Locate" style="line-height:1;" @onclick:stopPropagation @onclick="(()=>ShowTarget(f))">+</button>
+                                        </div>
+                                        @if (f.Type == PdfFieldType.Text)
+                                        { <input class="form-control form-control-sm" @bind="f.Value" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /> }
+                                        else if (f.Type == PdfFieldType.Checkbox)
+                                        { <div class="form-check form-switch"><input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(f)" @onchange="@(e=> OnCheckboxChanged(f,e))" /></div> }
                                     </div>
-                                    @if (f.Type == PdfFieldType.Text)
-                                    { <input class="form-control form-control-sm" @bind="f.Value" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /> }
-                                    else if (f.Type == PdfFieldType.Checkbox)
-                                    { <div class="form-check form-switch"><input type="checkbox" class="form-check-input" checked="@GetCheckboxValue(f)" @onchange="@(e=> OnCheckboxChanged(f,e))" /></div> }
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="mb-3">
+                    <h6 class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="d-flex align-items-center gap-1"><button class="btn btn-xs btn-toggle" @onclick="(()=> _collapseTexts = !_collapseTexts)"><i class="bi @( _collapseTexts?"bi-caret-right-fill":"bi-caret-down-fill")" style="font-size:.9rem;"></i></button>Text Elements (Pg @_currentPage)</span>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="AddTextBox">Add</button>
+                    </h6>
+                    @if(!_collapseTexts)
+                    {
+                        <div style="max-height:250px; overflow:auto;">
+                            @foreach (var textElement in _textElements.Where(t=>t.PageNumber==_currentPage))
+                            {
+                                var selected = textElement.Id == _activeTextId;
+                                <div class="mb-2 p-2 border rounded small @(selected?"panel-selected":"")" @onclick="(()=>SelectTextElement(textElement))">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted">TXT @textElement.Id.Substring(0,6)</span>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" title="Locate" @onclick:stopPropagation @onclick="(()=>ShowTarget(textElement))">+</button>
+                                            <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveTextElement(textElement.Id))"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </div>
+                                    <input class="form-control form-control-sm mb-1" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                    </div>
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-6"><input placeholder="X" class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><input placeholder="Y" class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
+                                    </div>
+                                    <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                 </div>
                             }
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
                 <div class="mb-3">
-                    <h6 class="d-flex justify-content-between align-items-center mb-2">Text Elements (Pg @_currentPage) <button class="btn btn-sm btn-outline-primary" @onclick="AddTextBox">Add</button></h6>
-                    <div style="max-height:250px; overflow:auto;">
-                        @foreach (var textElement in _textElements.Where(t=>t.PageNumber==_currentPage))
-                        {
-                            var selected = textElement.Id == _activeTextId;
-                            <div class="mb-2 p-2 border rounded small @(selected?"panel-selected":"")" @onclick="(()=>SelectTextElement(textElement))">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted">TXT @textElement.Id.Substring(0,6)</span>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(textElement))">Target</button>
-                                        <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveTextElement(textElement.Id))"><i class="bi bi-trash"></i></button>
+                    <h6 class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="d-flex align-items-center gap-1"><button class="btn btn-xs btn-toggle" @onclick="(()=> _collapseImages = !_collapseImages)"><i class="bi @( _collapseImages?"bi-caret-right-fill":"bi-caret-down-fill")" style="font-size:.9rem;"></i></button>Signatures (Pg @_currentPage)</span>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="UploadSignature">Add</button>
+                    </h6>
+                    @if(!_collapseImages)
+                    {
+                        <div style="max-height:250px; overflow:auto;">
+                            @foreach (var imageElement in _imageElements.Where(i=>i.PageNumber==_currentPage))
+                            {
+                                var selected = imageElement.Id == _activeImageId;
+                                <div class="mb-2 p-2 border rounded small @(selected?"panel-selected":"")" @onclick="(()=>SelectImageElement(imageElement))">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted">SIG @imageElement.Id.Substring(0,6)</span>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" title="Locate" @onclick:stopPropagation @onclick="(()=>ShowTarget(imageElement))">+</button>
+                                            <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveImageElement(imageElement.Id))"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
+                                    </div>
+                                    <div class="mb-1">
+                                        <label class="form-label small">Height (pts)</label>
+                                        <input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height)" @onchange="(e=>{OnImageHeightChanged(imageElement,e); QueuePreviewUpdate();})" />
+                                        <div class="small text-muted">W:@Math.Round(imageElement.Bounds.Width) H:@Math.Round(imageElement.Bounds.Height)</div>
                                     </div>
                                 </div>
-                                <input class="form-control form-control-sm mb-1" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
-                                <div class="row g-1 mb-1">
-                                    <div class="col-4"><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                    <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                    <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                </div>
-                                <div class="row g-1 mb-1">
-                                    <div class="col-6"><input placeholder="X" class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                    <div class="col-6"><input placeholder="Y" class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
-                                </div>
-                                <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
-                            </div>
-                        }
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <h6 class="d-flex justify-content-between align-items-center mb-2">Signatures (Pg @_currentPage) <button class="btn btn-sm btn-outline-secondary" @onclick="UploadSignature">Add</button></h6>
-                    <div style="max-height:250px; overflow:auto;">
-                        @foreach (var imageElement in _imageElements.Where(i=>i.PageNumber==_currentPage))
-                        {
-                            var selected = imageElement.Id == _activeImageId;
-                            <div class="mb-2 p-2 border rounded small @(selected?"panel-selected":"")" @onclick="(()=>SelectImageElement(imageElement))">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted">SIG @imageElement.Id.Substring(0,6)</span>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" title="Target" @onclick:stopPropagation @onclick="(()=>ShowTarget(imageElement))">Target</button>
-                                        <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveImageElement(imageElement.Id))"><i class="bi bi-trash"></i></button>
-                                    </div>
-                                </div>
-                                <div class="row g-1 mb-1">
-                                    <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                    <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
-                                </div>
-                                <div class="mb-1">
-                                    <label class="form-label small">Height (pts)</label>
-                                    <input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height)" @onchange="(e=>{OnImageHeightChanged(imageElement,e); QueuePreviewUpdate();})" />
-                                    <div class="small text-muted">W:@Math.Round(imageElement.Bounds.Width) H:@Math.Round(imageElement.Bounds.Height)</div>
-                                </div>
-                            </div>
-                        }
-                    </div>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -242,9 +210,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
 @code {
     // ---- State / Models ----
-    private record PaperSize(string Name,double Width,double Height);
-    private readonly List<PaperSize> _paperSizes = new(){ new("A4",595,842), new("Letter",612,792), new("Legal",612,1008)};
-    private string _selectedPaperName = "A4";
+    private record PaperSize(string Name,double Width,double Height); // retained (not exposed)
     private double _pageWidthPoints = 595;
     private double _pageHeightPoints = 842;
 
@@ -253,7 +219,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     private string _errorMessage = string.Empty; private string _uploadStatus = string.Empty; private string? _originalPdfBase64;
     private InputFile? _signatureFileInput;
 
-    // Added element classes back
     public class RichTextElement : PdfTextElement {}
     public class SignatureImageElement : PdfImageElement { public double BaseWidth { get; set; } public double BaseHeight { get; set; } }
 
@@ -268,8 +233,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private bool _hasDynamicPageSizes => _uploadResponse?.PageDimensions?.Any(d=>d.Width>0 && d.Height>0) == true;
 
-    // ---- Filtering / Helpers ----
-    private void ChangeFilter(FieldFilter f){ _fieldFilter = f; }
     private static string BaseName(string name) => name.Contains('#') ? name.Split('#')[0] : name;
     private static double Clamp(double v,double min,double max)=> v<min?min:(v>max?max:v);
 
@@ -282,7 +245,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
             {
                 _pageWidthPoints = dim.Width;
                 _pageHeightPoints = dim.Height;
-                // Clamp existing elements for this page
                 foreach(var t in _textElements.Where(t=>t.PageNumber==_currentPage))
                 { t.Bounds.X = Clamp(t.Bounds.X,0,_pageWidthPoints - Math.Max(5,t.Bounds.Width)); t.Bounds.Y = Clamp(t.Bounds.Y,0,_pageHeightPoints - Math.Max(5,t.Bounds.Height)); }
                 foreach(var i in _imageElements.Where(i=>i.PageNumber==_currentPage))
@@ -291,7 +253,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
         }
     }
 
-    // ---- JS Interop Move ----
     [JSInvokable]
     public Task MoveActiveElement(double xPdf, double yPdf)
     {
@@ -325,7 +286,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     }
     public void Dispose() => _dotNetRef?.Dispose();
 
-    // ---- Upload / Session ----
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         var file = e.File; if (file == null) return;
@@ -338,20 +298,17 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
             PdfUploadResponse? serverResp = null; try { serverResp = await PdfApiService.UploadPdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server metadata failed"); }
             if (serverResp != null) { _uploadResponse = serverResp; _uploadStatus = "Server metadata parsed"; }
             else { _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 }; _uploadStatus = "Parsed locally"; }
-            _currentPage = 1; UpdateCurrentPageSize();
+            _currentPage = 1; _pdfLoaded = true; UpdateCurrentPageSize();
             await JSRuntime.InvokeVoidAsync("savePdfToIndexedDb", _uploadResponse.Id, _originalPdfBase64);
             await JSRuntime.InvokeVoidAsync("setLastSessionId", _uploadResponse.Id);
-            SaveSession();
+            SaveSession(); QueuePreviewUpdate();
         }
         catch (Exception ex) { _errorMessage = $"Parse error: {ex.Message}"; Logger.LogError(ex, "OnFileSelected"); }
         finally { _isUploading = false; StateHasChanged(); }
     }
 
-    private async Task BeginEdit(){ if (_uploadResponse == null) return; if (string.IsNullOrEmpty(_originalPdfBase64)) _originalPdfBase64 = await JSRuntime.InvokeAsync<string?>("getPdfFromIndexedDb", _uploadResponse.Id); _pdfLoaded = true; _currentPage = 1; UpdateCurrentPageSize(); QueuePreviewUpdate(); }
-    private void ExitEdit()=> _pdfLoaded=false;
     private void Reset(){ if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id); _uploadResponse=null; _pdfLoaded=false; _textElements.Clear(); _imageElements.Clear(); _errorMessage=""; _uploadStatus=""; _originalPdfBase64=null; }
 
-    // ---- Element CRUD ----
     private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); SaveSession(); QueuePreviewUpdate(); }
     private async Task UploadSignature(){ await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()"); }
     private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try { using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; }}
@@ -359,7 +316,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     private void RemoveTextElement(string id){ _textElements.RemoveAll(t=>t.Id==id); SaveSession(); QueuePreviewUpdate(); }
     private void RemoveImageElement(string id){ _imageElements.RemoveAll(i=>i.Id==id); SaveSession(); QueuePreviewUpdate(); }
 
-    // ---- Save / Preview ----
     private async Task SaveAndDownload(){ if(_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _isProcessing=true; try{ var req=new PdfEditRequest{ OriginalPdfBase64=_originalPdfBase64, FormFields=_uploadResponse.FormFields, TextElements=_textElements.Cast<PdfTextElement>().ToList(), ImageElements=_imageElements.Cast<PdfImageElement>().ToList() }; var resp=await PdfApiService.ProcessPdfAsync(req); if(resp.IsSuccessStatusCode){ var bytes=await resp.Content.ReadAsByteArrayAsync(); await JSRuntime.InvokeVoidAsync("downloadFile", $"edited-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", Convert.ToBase64String(bytes)); } else _errorMessage=$"Process failed: {(int)resp.StatusCode} {resp.ReasonPhrase}"; } catch(Exception ex){ _errorMessage=$"Process error: {ex.Message}"; } finally{ _isProcessing=false; } }
 
     private void SaveSession(){ if(_uploadResponse==null) return; try{ var wrapper=new { upload=_uploadResponse, texts=_textElements, images=_imageElements }; JSRuntime.InvokeVoidAsync("saveMetadata", _uploadResponse.Id, JsonSerializer.Serialize(wrapper)); } catch { } }
@@ -368,41 +324,52 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private async Task UpdatePreviewAsync(){ if(_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _isPreviewing=true; try{ var req=new PdfEditRequest{ OriginalPdfBase64=_originalPdfBase64, FormFields=_uploadResponse.FormFields, TextElements=_textElements.Cast<PdfTextElement>().ToList(), ImageElements=_imageElements.Cast<PdfImageElement>().ToList() }; var resp=await PdfApiService.ProcessPdfAsync(req); if(resp.IsSuccessStatusCode){ var bytes=await resp.Content.ReadAsByteArrayAsync(); var b64=Convert.ToBase64String(bytes); await JSRuntime.InvokeVoidAsync("renderPdfPage", b64, "pdfPreviewCanvas", _currentPage, 1.0); } else _errorMessage=$"Preview failed: {(int)resp.StatusCode}"; } catch(Exception ex){ _errorMessage=$"Preview error: {ex.Message}"; } finally{ _isPreviewing=false; StateHasChanged(); } }
 
-    // ---- Navigation ----
     private void PrevPage(){ if(_currentPage>1){ _currentPage--; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
     private void NextPage(){ if(_uploadResponse!=null && _currentPage<_uploadResponse.PageCount){ _currentPage++; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
 
-    // ---- Selection ----
     private void SelectFormField(PdfFormField f){ _activeFieldName=f.Name; if(f.PageNumber!=_currentPage){ _currentPage=f.PageNumber; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
     private void SelectTextElement(RichTextElement t){ _activeTextId=t.Id; _activeImageId=null; _activeFieldName=null; }
     private void SelectImageElement(SignatureImageElement i){ _activeImageId=i.Id; _activeTextId=null; _activeFieldName=null; }
 
-    // ---- Target Visual ----
     private async Task ShowTarget(RichTextElement t)=> await ShowTargetAt(t.Bounds.X + t.Bounds.Width/2.0, t.Bounds.Y + t.Bounds.Height/2.0);
     private async Task ShowTarget(SignatureImageElement img)=> await ShowTargetAt(img.Bounds.X + img.Bounds.Width/2.0, img.Bounds.Y + img.Bounds.Height/2.0);
     private async Task ShowTarget(PdfFormField f)=> await ShowTargetAt(f.Bounds.X + f.Bounds.Width/2.0, f.Bounds.Y + f.Bounds.Height/2.0);
     private async Task ShowTargetAt(double x,double y){ try{ await JSRuntime.InvokeVoidAsync("showPdfTarget","pdfPreviewCanvas",x,y);}catch{} }
 
-    // ---- Position Updates ----
     private void UpdateImagePosition(SignatureImageElement i,string which,object? val){ if(double.TryParse(val?.ToString(), out var num)){ if(which.EndsWith("X")) i.Bounds.X=Clamp(num,0,_pageWidthPoints - Math.Max(5,i.Bounds.Width)); else i.Bounds.Y=Clamp(num,0,_pageHeightPoints - Math.Max(5,i.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); } }
     private void UpdateTextPosition(RichTextElement t,string which,object? val){ if(double.TryParse(val?.ToString(), out var num)){ if(which.EndsWith("X")) t.Bounds.X=Clamp(num,0,_pageWidthPoints - Math.Max(5,t.Bounds.Width)); else t.Bounds.Y=Clamp(num,0,_pageHeightPoints - Math.Max(5,t.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); } }
 
-    // ---- Checkbox handling ----
     private void OnCheckboxChanged(PdfFormField field, ChangeEventArgs e){ var newVal = e.Value is bool b ? b : (bool.TryParse(e.Value?.ToString(), out var px) && px); if(newVal && field.Name.Contains('#') && _uploadResponse!=null){ var baseName=BaseName(field.Name); foreach(var f in _uploadResponse.FormFields.Where(ff=>ff!=field && BaseName(ff.Name)==baseName)) f.Value="false"; } field.Value=newVal?"true":"false"; SaveSession(); QueuePreviewUpdate(); }
 
-    // ---- Paper size ----
-    private void ApplySelectedPaperSize(){ if(_hasDynamicPageSizes) return; var ps=_paperSizes.FirstOrDefault(p=>p.Name==_selectedPaperName) ?? _paperSizes[0]; _pageWidthPoints=ps.Width; _pageHeightPoints=ps.Height; foreach(var t in _textElements){ t.Bounds.X=Clamp(t.Bounds.X,0,_pageWidthPoints - t.Bounds.Width); t.Bounds.Y=Clamp(t.Bounds.Y,0,_pageHeightPoints - t.Bounds.Height);} foreach(var i in _imageElements){ i.Bounds.X=Clamp(i.Bounds.X,0,_pageWidthPoints - i.Bounds.Width); i.Bounds.Y=Clamp(i.Bounds.Y,0,_pageHeightPoints - i.Bounds.Height);} QueuePreviewUpdate(); }
-
-    // ---- Helpers ----
     private bool GetCheckboxValue(PdfFormField field)=> !string.IsNullOrEmpty(field.Value) && field.Value.ToLower()!="false" && field.Value!="0";
     private IEnumerable<PdfFormField> FilteredFields() => _uploadResponse!.FormFields
         .Where(f=>f.PageNumber==_currentPage)
         .Where(f=> _fieldFilter==FieldFilter.All || (_fieldFilter==FieldFilter.TextOnly && f.Type==PdfFieldType.Text) || (_fieldFilter==FieldFilter.Checkboxes && f.Type==PdfFieldType.Checkbox))
         .Where(f=> string.IsNullOrWhiteSpace(_fieldNameFilter) || f.Name.Contains(_fieldNameFilter, StringComparison.OrdinalIgnoreCase) || BaseName(f.Name).Contains(_fieldNameFilter, StringComparison.OrdinalIgnoreCase));
+    private bool _showInfo = false; // collapsed by default
+    private bool _collapseFields = false; // keep fields expanded by default? false means open
+    private bool _collapseTexts = false;
+    private bool _collapseImages = false;
+
+    private string ThumbBoxStyle(Rectangle r)
+    {
+        var w = _pageWidthPoints <= 0 ? 1 : _pageWidthPoints;
+        var h = _pageHeightPoints <= 0 ? 1 : _pageHeightPoints;
+        double left = r.X / w * 100.0;
+        double top = (1 - (r.Y + r.Height) / h) * 100.0;
+        double width = (r.Width / w) * 100.0;
+        double height = (r.Height / h) * 100.0;
+        if (width < 1) width = 1; if (height < 1) height = 1;
+        return $"left:{left:F2}%;top:{top:F2}%;width:{width:F2}%;height:{height:F2}%;";
+    }
 }
 
 <style>
     .panel-selected { border-color:#ff5722 !important; box-shadow:0 0 4px rgba(255,87,34,.6); }
     .field-item.selected { border:1px solid #ff5722; background:rgba(255,87,34,.05); }
-    .editor-toolbar { position:sticky; top:0; z-index:10; }
+    .editor-toolbar { position:sticky; top:0; z-index:50; background:#f8f9fa; }
+    .doc-info-pop { animation: fadeIn .12s ease-in; }
+    @@keyframes fadeIn { from { opacity:0; transform:translateY(-4px);} to { opacity:1; transform:translateY(0);} }
+    .btn-xs{ padding:.15rem .35rem; font-size:.65rem; line-height:1; }
+    .btn-toggle{ border:0; background:transparent; padding:0; }
 </style>
