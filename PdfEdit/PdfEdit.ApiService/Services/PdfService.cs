@@ -68,8 +68,27 @@ public class PdfService : IPdfService
         {
             foreach (var f in request.FormFields)
             {
-                var pdfField = form.GetField(f.Name);
-                pdfField?.SetValue(f.Value);
+                try
+                {
+                    var pdfField = form.GetField(f.Name);
+                    if (pdfField == null) continue;
+                    if (f.Type == PdfFieldType.Checkbox && pdfField is PdfButtonFormField btn)
+                    {
+                        // Determine available appearance states, choose first non-Off as ON
+                        var states = btn.GetAppearanceStates();
+                        var onState = states.FirstOrDefault(s => !s.Equals("Off", StringComparison.OrdinalIgnoreCase)) ?? "Yes";
+                        var target = (f.Value?.Equals("true", StringComparison.OrdinalIgnoreCase) == true) ? onState : "Off";
+                        btn.SetValue(target);
+                    }
+                    else
+                    {
+                        pdfField.SetValue(f.Value ?? string.Empty);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed setting field {Field}", f.Name);
+                }
             }
             form.FlattenFields();
         }
@@ -102,11 +121,19 @@ public class PdfService : IPdfService
     {
         try
         {
+            var type = GetFieldType(field);
+            var rawVal = field.GetValueAsString() ?? string.Empty;
+            string val = rawVal;
+            if (type == PdfFieldType.Checkbox)
+            {
+                // Normalize checkbox value to boolean string
+                val = (!string.IsNullOrEmpty(rawVal) && !rawVal.Equals("Off", StringComparison.OrdinalIgnoreCase)) ? "true" : "false";
+            }
             return new PdfEdit.Shared.Models.PdfFormField
             {
                 Name = name,
-                Type = GetFieldType(field),
-                Value = field.GetValueAsString() ?? string.Empty,
+                Type = type,
+                Value = val,
                 IsRequired = field.IsRequired(),
                 PageNumber = GetFieldPageNumber(field),
                 Bounds = GetFieldBounds(field)
@@ -147,7 +174,16 @@ public class PdfService : IPdfService
     {
         var t = field.GetFormType();
         if (t.Equals(PdfName.Tx)) return PdfFieldType.Text;
-        if (t.Equals(PdfName.Btn)) return PdfFieldType.Checkbox;
+        if (t.Equals(PdfName.Btn))
+        {
+            if (field is PdfButtonFormField btn)
+            {
+                try { if (btn.IsRadio()) return PdfFieldType.RadioButton; } catch { }
+                // treat everything else under Btn as checkbox (push buttons rarely needed for editing here)
+                return PdfFieldType.Checkbox;
+            }
+            return PdfFieldType.Checkbox;
+        }
         if (t.Equals(PdfName.Ch)) return PdfFieldType.ComboBox;
         if (t.Equals(PdfName.Sig)) return PdfFieldType.Signature;
         return PdfFieldType.Text;
