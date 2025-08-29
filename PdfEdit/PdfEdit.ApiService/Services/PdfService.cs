@@ -1,15 +1,17 @@
 using System.Collections.Concurrent;
-using System.Linq; // added for Select
+using System.Linq;
 using iText.Forms;
 using iText.Forms.Fields;
 using iText.IO.Image;
+using iText.Kernel.Colors;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Annot;
 using iText.Layout;
 using iText.Layout.Element;
 using Microsoft.Extensions.Logging;
 using PdfEdit.Shared.Models;
 using RectangleModel = PdfEdit.Shared.Models.Rectangle;
-using iText.Kernel.Colors; // added
+using SharedPdfFormField = PdfEdit.Shared.Models.PdfFormField;
 
 namespace PdfEdit.Api.Services;
 
@@ -17,35 +19,54 @@ public class PdfService : IPdfService
 {
     private readonly ILogger<PdfService> _logger;
     private static readonly ConcurrentDictionary<string, byte[]> _documents = new();
-    // 1x1 white JPEG
     private static readonly byte[] PlaceholderJpeg = Convert.FromBase64String("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCfAA//2Q==");
 
     public PdfService(ILogger<PdfService> logger) => _logger = logger;
 
     public async Task<PdfUploadResponse> ExtractFormFieldsAsync(Stream pdfStream, string fileName)
     {
-        var documentId = Guid.NewGuid().ToString();
+        var id = Guid.NewGuid().ToString();
         using var ms = new MemoryStream();
         await pdfStream.CopyToAsync(ms);
         var bytes = ms.ToArray();
-        _documents[documentId] = bytes;
+        _documents[id] = bytes;
 
-        var response = new PdfUploadResponse { Id = documentId, FileName = fileName };
-
+        var resp = new PdfUploadResponse { Id = id, FileName = fileName };
         using var reader = new PdfReader(new MemoryStream(bytes));
         using var pdfDoc = new PdfDocument(reader);
-        response.PageCount = pdfDoc.GetNumberOfPages();
-
+        resp.PageCount = pdfDoc.GetNumberOfPages();
         var form = PdfAcroForm.GetAcroForm(pdfDoc, false);
         if (form != null)
         {
             foreach (var kv in form.GetAllFormFields())
             {
-                var converted = ConvertToFormField(kv.Key, kv.Value);
-                if (converted != null) response.FormFields.Add(converted);
+                try
+                {
+                    var field = kv.Value;
+                    // For checkbox groups (same field name with multiple widgets) expose each widget separately: Name#1, Name#2, ...
+                    if (field is PdfButtonFormField btn && IsCheckbox(btn))
+                    {
+                        var widgets = btn.GetWidgets();
+                        if (widgets.Count > 1)
+                        {
+                            var currentOn = btn.GetValueAsString();
+                            for (int i = 0; i < widgets.Count; i++)
+                            {
+                                var w = widgets[i];
+                                var onState = GetOnState(btn, w);
+                                var isOn = !string.IsNullOrEmpty(currentOn) && currentOn == onState && !currentOn.Equals("Off", StringComparison.OrdinalIgnoreCase);
+                                resp.FormFields.Add(BuildWidgetField(kv.Key + "#" + (i + 1), PdfFieldType.Checkbox, isOn, w));
+                            }
+                            continue; // skip normal single add
+                        }
+                    }
+                    var converted = ConvertField(kv.Key, field);
+                    if (converted != null) resp.FormFields.Add(converted);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Extract field failed {Name}", kv.Key); }
             }
         }
-        return response;
+        return resp;
     }
 
     public async Task<byte[]> ProcessPdfAsync(PdfEditRequest request)
@@ -54,7 +75,7 @@ public class PdfService : IPdfService
             ? Convert.FromBase64String(request.OriginalPdfBase64)
             : (!string.IsNullOrEmpty(request.DocumentId) && _documents.TryGetValue(request.DocumentId, out var cached)
                 ? cached
-                : throw new FileNotFoundException("Document not found or expired.", request.DocumentId));
+                : throw new FileNotFoundException("Document not found", request.DocumentId));
 
         using var input = new MemoryStream(originalPdf);
         using var output = new MemoryStream();
@@ -66,29 +87,42 @@ public class PdfService : IPdfService
         var form = PdfAcroForm.GetAcroForm(pdfDoc, true);
         if (form != null)
         {
-            foreach (var f in request.FormFields)
+            var grouped = request.FormFields.GroupBy(f => BaseName(f.Name));
+            foreach (var group in grouped)
             {
                 try
                 {
-                    var pdfField = form.GetField(f.Name);
+                    var baseName = group.Key;
+                    var pdfField = form.GetField(baseName);
                     if (pdfField == null) continue;
-                    if (f.Type == PdfFieldType.Checkbox && pdfField is PdfButtonFormField btn)
+                    if (pdfField is PdfButtonFormField btn && IsCheckbox(btn))
                     {
-                        // Determine available appearance states, choose first non-Off as ON
-                        var states = btn.GetAppearanceStates();
-                        var onState = states.FirstOrDefault(s => !s.Equals("Off", StringComparison.OrdinalIgnoreCase)) ?? "Yes";
-                        var target = (f.Value?.Equals("true", StringComparison.OrdinalIgnoreCase) == true) ? onState : "Off";
-                        btn.SetValue(target);
+                        var widgets = btn.GetWidgets();
+                        if (widgets.Count > 1)
+                        {
+                            bool anyOn = false; string? firstOnState = null;
+                            for (int i = 0; i < widgets.Count; i++)
+                            {
+                                var widgetEntry = group.FirstOrDefault(g => ParseIndex(g.Name) == i + 1);
+                                bool on = widgetEntry != null && IsTrue(widgetEntry.Value);
+                                SetCheckboxWidgetAppearance(btn, widgets[i], on, ref firstOnState);
+                                if (on) anyOn = true;
+                            }
+                            btn.SetValue(anyOn ? firstOnState ?? "Yes" : "Off");
+                        }
+                        else
+                        {
+                            var onVal = group.Any(g => IsTrue(g.Value));
+                            SetCheckboxField(btn, onVal);
+                        }
                     }
                     else
                     {
-                        pdfField.SetValue(f.Value ?? string.Empty);
+                        var first = group.First();
+                        pdfField.SetValue(first.Value ?? string.Empty);
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed setting field {Field}", f.Name);
-                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Apply group failed {Group}", group.Key); }
             }
             form.FlattenFields();
         }
@@ -114,36 +148,51 @@ public class PdfService : IPdfService
     {
         if (!_documents.TryGetValue(documentId, out var bytes)) throw new FileNotFoundException("Document not found", documentId);
         await Task.CompletedTask;
-        return PlaceholderJpeg; // placeholder; client renders real page with pdf.js
+        return PlaceholderJpeg;
     }
 
-    private PdfEdit.Shared.Models.PdfFormField? ConvertToFormField(string name, iText.Forms.Fields.PdfFormField field)
+    private SharedPdfFormField? ConvertField(string name, iText.Forms.Fields.PdfFormField field)
     {
         try
         {
             var type = GetFieldType(field);
-            var rawVal = field.GetValueAsString() ?? string.Empty;
-            string val = rawVal;
+            var raw = field.GetValueAsString() ?? string.Empty;
             if (type == PdfFieldType.Checkbox)
-            {
-                // Normalize checkbox value to boolean string
-                val = (!string.IsNullOrEmpty(rawVal) && !rawVal.Equals("Off", StringComparison.OrdinalIgnoreCase)) ? "true" : "false";
-            }
-            return new PdfEdit.Shared.Models.PdfFormField
+                raw = (!string.IsNullOrEmpty(raw) && !raw.Equals("Off", StringComparison.OrdinalIgnoreCase)) ? "true" : "false";
+            return new SharedPdfFormField
             {
                 Name = name,
                 Type = type,
-                Value = val,
+                Value = raw,
                 IsRequired = field.IsRequired(),
                 PageNumber = GetFieldPageNumber(field),
                 Bounds = GetFieldBounds(field)
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) { _logger.LogWarning(ex, "Convert field failed {Name}", name); return null; }
+    }
+
+    private SharedPdfFormField BuildWidgetField(string name, PdfFieldType type, bool isOn, PdfWidgetAnnotation widget)
+    {
+        var rect = widget.GetRectangle();
+        var bounds = new RectangleModel();
+        try
         {
-            _logger.LogWarning(ex, "Field convert failed: {Name}", name);
-            return null;
+            if (rect != null && rect.Size() >= 4)
+            {
+                bounds = new RectangleModel
+                {
+                    X = rect.GetAsNumber(0)?.DoubleValue() ?? 0,
+                    Y = rect.GetAsNumber(1)?.DoubleValue() ?? 0,
+                    Width = (rect.GetAsNumber(2)?.DoubleValue() ?? 0) - (rect.GetAsNumber(0)?.DoubleValue() ?? 0),
+                    Height = (rect.GetAsNumber(3)?.DoubleValue() ?? 0) - (rect.GetAsNumber(1)?.DoubleValue() ?? 0)
+                };
+            }
         }
+        catch { }
+        int pageNum = 1;
+        try { var page = widget.GetPage(); if (page != null) pageNum = page.GetDocument().GetPageNumber(page); } catch { }
+        return new SharedPdfFormField { Name = name, Type = type, Value = isOn ? "true" : "false", PageNumber = pageNum, Bounds = bounds };
     }
 
     private RectangleModel GetFieldBounds(iText.Forms.Fields.PdfFormField field)
@@ -179,7 +228,6 @@ public class PdfService : IPdfService
             if (field is PdfButtonFormField btn)
             {
                 try { if (btn.IsRadio()) return PdfFieldType.RadioButton; } catch { }
-                // treat everything else under Btn as checkbox (push buttons rarely needed for editing here)
                 return PdfFieldType.Checkbox;
             }
             return PdfFieldType.Checkbox;
@@ -204,6 +252,65 @@ public class PdfService : IPdfService
         return 1;
     }
 
+    private bool IsCheckbox(PdfButtonFormField btn)
+    {
+        try { if (btn.IsRadio()) return false; } catch { }
+        return true;
+    }
+
+    private string GetOnState(PdfButtonFormField btn, PdfWidgetAnnotation widget)
+    {
+        try
+        {
+            var appearance = widget.GetAppearanceDictionary();
+            var normal = appearance?.GetAsDictionary(PdfName.N);
+            if (normal != null)
+            {
+                foreach (var entry in normal.KeySet())
+                {
+                    var v = entry.GetValue();
+                    if (!v.Equals("Off", StringComparison.OrdinalIgnoreCase)) return v;
+                }
+            }
+        }
+        catch { }
+        try { return btn.GetAppearanceStates().FirstOrDefault(s => !s.Equals("Off", StringComparison.OrdinalIgnoreCase)) ?? "Yes"; } catch { }
+        return "Yes";
+    }
+
+    private void SetCheckboxField(PdfButtonFormField btn, bool on)
+    {
+        try
+        {
+            var states = btn.GetAppearanceStates();
+            var onState = states.FirstOrDefault(s => !s.Equals("Off", StringComparison.OrdinalIgnoreCase)) ?? "Yes";
+            btn.SetValue(on ? onState : "Off");
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "SetCheckboxField failed"); }
+    }
+
+    private void SetCheckboxWidgetAppearance(PdfButtonFormField btn, PdfWidgetAnnotation widget, bool on, ref string? firstOnState)
+    {
+        try
+        {
+            var onState = GetOnState(btn, widget);
+            if (on)
+            {
+                widget.SetAppearanceState(new PdfName(onState));
+                if (firstOnState == null) firstOnState = onState;
+            }
+            else
+            {
+                widget.SetAppearanceState(new PdfName("Off"));
+            }
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "SetCheckboxWidgetAppearance failed"); }
+    }
+
+    private static bool IsTrue(string? v) => !string.IsNullOrEmpty(v) && !v.Equals("false", StringComparison.OrdinalIgnoreCase) && !v.Equals("Off", StringComparison.OrdinalIgnoreCase) && v != "0";
+    private static string BaseName(string name) => name.Contains('#') ? name.Split('#')[0] : name;
+    private static int ParseIndex(string name) { var h = name.LastIndexOf('#'); return h < 0 ? 0 : (int.TryParse(name[(h + 1)..], out var i) ? i : 0); }
+
     private void AddTextElement(Document doc, PdfDocument pdfDoc, PdfTextElement t)
     {
         try
@@ -212,7 +319,7 @@ public class PdfService : IPdfService
                 .SetFontSize(t.FontSize)
                 .SetFixedPosition(t.PageNumber, (float)t.Bounds.X, (float)t.Bounds.Y, (float)(t.Bounds.Width <= 0 ? 200 : t.Bounds.Width));
             var color = TryParseColor(t.Color);
-            if (color != null) p.SetFontColor(color);
+            if (color is not null) p.SetFontColor(color);
             doc.Add(p);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Add text failed {Id}", t.Id); }
@@ -223,15 +330,11 @@ public class PdfService : IPdfService
         if (string.IsNullOrWhiteSpace(hex)) return null;
         try
         {
-            hex = hex.Trim();
-            if (hex.StartsWith("#")) hex = hex.Substring(1);
-            if (hex.Length == 3) // short form rgb
-            {
-                hex = string.Concat(hex.Select(c => new string(c, 2)));
-            }
+            hex = hex.Trim(); if (hex.StartsWith("#")) hex = hex[1..];
+            if (hex.Length == 3) hex = string.Concat(hex.Select(c => new string(c, 2)));
             if (hex.Length == 6)
             {
-                var r = Convert.ToInt32(hex.Substring(0, 2), 16);
+                var r = Convert.ToInt32(hex[..2], 16);
                 var g = Convert.ToInt32(hex.Substring(2, 2), 16);
                 var b = Convert.ToInt32(hex.Substring(4, 2), 16);
                 return new DeviceRgb(r, g, b);
