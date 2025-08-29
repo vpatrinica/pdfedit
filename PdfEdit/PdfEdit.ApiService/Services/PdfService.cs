@@ -35,6 +35,17 @@ public class PdfService : IPdfService
         using var reader = new PdfReader(new MemoryStream(bytes));
         using var pdfDoc = new PdfDocument(reader);
         resp.PageCount = pdfDoc.GetNumberOfPages();
+        // Populate per-page dimensions (points)
+        for(int p=1; p<=resp.PageCount; p++)
+        {
+            try
+            {
+                var page = pdfDoc.GetPage(p);
+                var size = page.GetPageSize();
+                resp.PageDimensions.Add(new PageDimension{ PageNumber=p, Width=size.GetWidth(), Height=size.GetHeight() });
+            }
+            catch { resp.PageDimensions.Add(new PageDimension{ PageNumber=p, Width=0, Height=0 }); }
+        }
         var form = PdfAcroForm.GetAcroForm(pdfDoc, false);
         if (form != null)
         {

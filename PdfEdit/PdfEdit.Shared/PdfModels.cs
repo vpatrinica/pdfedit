@@ -6,6 +6,14 @@ public class PdfUploadResponse
     public string FileName { get; set; } = string.Empty;
     public int PageCount { get; set; }
     public List<PdfFormField> FormFields { get; set; } = new();
+    public List<PageDimension> PageDimensions { get; set; } = new(); // new: per-page size in points
+}
+
+public class PageDimension
+{
+    public int PageNumber { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
 }
 
 public class PdfFormField
