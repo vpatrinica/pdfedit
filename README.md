@@ -4,17 +4,35 @@ Light-weight self-hosted PDF form editor built with .NET 8 (Blazor Server + mini
 
 > Rendering: Client-side page rendering uses pdf.js (loaded dynamically with CDN fallback). If pdf.js fails to load, a lightweight placeholder is shown until it becomes available.
 
+## Project Status
+This project is in light maintenance mode. No new features are planned short‑term unless a concrete personal need arises or there is explicit external demand / issues filed. Expect:
+- Bug fixes / security updates (best effort)
+- Minor UX polish when convenient
+- No roadmap for major capabilities (collaboration, multi-file batch, advanced layout, OCR, etc.)
+
+Feel free to open issues; they may be addressed based on impact / demand.
+
+### Not Planned (Will Not Be Implemented Unless Significant Demand)
+These items are explicitly out of scope and should be assumed "won't fix" unless there is strong, demonstrated demand:
+- Multi‑PDF batch processing
+- Undo / redo history stack
+- Real‑time collaborative editing / multi-user cursors
+- Server generated page thumbnails / previews service
+- Integrated authentication / multi-tenant roles
+- OCR, form auto-detection enhancements beyond current basic parsing
+- Advanced layout tools (grid / alignment / snapping / rulers)
+- Mobile-optimized drag positioning overhaul
+
 ## Recent Changes
 - Switched to Aspire AppHost (run PdfEdit.AppHost to start everything: web + api + Redis cache)
 - Fixed text color rendering (hex colors now respected in generated PDF)
 - Added Target button for text elements: shows crosshair + concentric circles (radii 5,7,10) at element center for quick coordinate verification
-- Renamed endpoint POST /api/pdf/upload -> POST /api/pdf/parse (code & docs)
 - Added font selection for text elements (Arial, Times New Roman, Courier New mapped to core PDF fonts)
 
 ## Feature Matrix
 | Area | Capability | Notes |
 |------|------------|-------|
-| Upload | Single PDF up to 50 MB | Stored transiently in memory (per session) |
+| Parse | Single PDF up to 50 MB | Stored transiently in memory (per session) |
 | Form Extraction | Text, checkbox (group splitting), combo/radio (treated generic) | Checkbox groups exposed as Name#1, Name#2 ... |
 | Field Editing | Change text field values; toggle checkboxes | Radio groups handled as checkbox style; flattened |
 | Text Elements | Add arbitrary text (content, font size, width/height, color, font family) | PDF point coordinate space |
@@ -24,10 +42,6 @@ Light-weight self-hosted PDF form editor built with .NET 8 (Blazor Server + mini
 | Processing | iText7 flatten: apply fields + text + images | Output is flattened (non-editable) |
 | Rendering | pdf.js page raster (client) | Dynamic loader with multi-CDN fallback |
 | Cleanup | Signature ref counting (release on delete / reset) | Prevents orphan blobs |
-
-## Non-Goals (Current)
-- Multi-PDF batch operations
-- Undo/redo stack
 
 ## Technology Stack
 | Layer | Tech |
@@ -56,7 +70,7 @@ cd ../PdfEdit.Web && dotnet run
 Adjust API base address in Program.cs if not using AppHost.
 
 ## Usage Walkthrough
-1. Upload a PDF.
+1. Parse a PDF.
 2. Fields panel populates; filter or edit values.
 3. Add text or signature elements; adjust numeric bounds (choose font family for text as needed).
 4. Use Locate to confirm coordinates or double-click page to move active element.
@@ -77,7 +91,7 @@ Blazor Server (UI + JS interop) --> Pdf API (iText7) --> Flattened PDF
 ## Data Lifecycle
 | Stage | Browser | Server | Notes |
 |-------|---------|--------|-------|
-| Upload | Original PDF blob (IDB) | Raw bytes (memory dict) | Id maps across |
+| Parse | Original PDF blob (IDB) | Raw bytes (memory dict) | Id maps across |
 | Signatures | Blob (IDB, hashed) | Base64 per request | Ref counts manage cleanup |
 | Metadata | LocalStorage JSON | N/A | Restored on reload |
 | Output | Download only | Streamed once | Not retained |

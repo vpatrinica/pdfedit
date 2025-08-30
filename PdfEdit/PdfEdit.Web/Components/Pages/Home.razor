@@ -130,34 +130,41 @@
                                             <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveTextElement(textElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
-                                    <input class="form-control form-control-sm mb-1" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                    <input class="form-control form-control-sm mb-1" placeholder="Text" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                    <!-- Row: X Y L H -->
                                     <div class="row g-1 mb-1">
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                        <div class="col-4"><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                    </div>
-                                    <div class="row g-1 mb-1">
-                                        <div class="col-6"><input placeholder="X" class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                        <div class="col-6"><input placeholder="Y" class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
-                                    </div>
-                                    <div class="row g-1 mb-1">
-                                        <div class="col-7">
-                                            <select class="form-select form-select-sm" @bind="textElement.FontFamily" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})">
-                                                @foreach (var f in _availableFonts)
-                                                {
-                                                    <option value="@f">@f</option>
-                                                }
-                                            </select>
+                                        <div class="col-3">
+                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">X</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
                                         </div>
-                                        <div class="col-5">
-                                            <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                        <div class="col-3">
+                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">Y</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">L</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">H</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
                                         </div>
                                     </div>
-                                    <div class="d-flex gap-1">
-                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Bold?"style-active":"")" title="Bold" @onclick="() => ToggleBold(textElement)"><i class="bi bi-type-bold"></i></button>
-                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Italic?"style-active":"")" title="Italic" @onclick="() => ToggleItalic(textElement)"><i class="bi bi-type-italic"></i></button>
-                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Underline?"style-active":"")" title="Underline" @onclick="() => ToggleUnderline(textElement)"><i class="bi bi-type-underline"></i></button>
-                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Strike?"style-active":"")" title="Strike" @onclick="() => ToggleStrike(textElement)"><i class="bi bi-type-strikethrough"></i></button>
+                                    <!-- Row: Font + Size + Color + Styles -->
+                                    <div class="d-flex flex-wrap gap-1 align-items-stretch mb-1">
+                                        <select class="form-select form-select-sm flex-grow-1" style="min-width:90px;" @bind="textElement.FontFamily" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})">
+                                            @foreach (var f in _availableFonts)
+                                            {
+                                                <option value="@f">@f</option>
+                                            }
+                                        </select>
+                                        <div class="input-group input-group-sm" style="width:90px;">
+                                            <span class="input-group-text px-1">Sz</span>
+                                            <input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                        </div>
+                                        <input type="color" class="form-control form-control-color form-control-sm p-0" style="width:38px;" title="Color" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                        <div class="btn-group btn-group-sm ms-auto" role="group">
+                                            <button class="btn btn-outline-secondary style-btn @(textElement.Bold?"style-active":"")" title="Bold" @onclick="() => ToggleBold(textElement)"><small>B</small></button>
+                                            <button class="btn btn-outline-secondary style-btn @(textElement.Italic?"style-active":"")" title="Italic" @onclick="() => ToggleItalic(textElement)"><small><em>I</em></small></button>
+                                            <button class="btn btn-outline-secondary style-btn @(textElement.Underline?"style-active":"")" title="Underline" @onclick="() => ToggleUnderline(textElement)"><small>U</small></button>
+                                            <button class="btn btn-outline-secondary style-btn @(textElement.Strike?"style-active":"")" title="Strike" @onclick="() => ToggleStrike(textElement)"><small>S</small></button>
+                                        </div>
                                     </div>
                                 </div>
                             }
@@ -183,15 +190,13 @@
                                             <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveImageElement(imageElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
+                                    <!-- Compact signature controls with labels: X / Y / H -->
                                     <div class="row g-1 mb-1">
-                                        <div class="col-6"><label class="form-label small">X</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                        <div class="col-6"><label class="form-label small">Y</label><input type="number" class="form-control form-control-sm" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
+                                        <div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text px-1">X</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div></div>
+                                        <div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text px-1">Y</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div></div>
+                                        <div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text px-1">H</span><input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height)" @onchange="(e=>{OnImageHeightChanged(imageElement,e); QueuePreviewUpdate();})" /></div></div>
                                     </div>
-                                    <div class="mb-1">
-                                        <label class="form-label small">Height (pts)</label>
-                                        <input class="form-control form-control-sm" type="number" min="5" value="@Math.Round(imageElement.Bounds.Height)" @onchange="(e=>{OnImageHeightChanged(imageElement,e); QueuePreviewUpdate();})" />
-                                        <div class="small text-muted">W:@Math.Round(imageElement.Bounds.Width) H:@Math.Round(imageElement.Bounds.Height)</div>
-                                    </div>
+                                    <div class="small text-muted">W:@Math.Round(imageElement.Bounds.Width) H:@Math.Round(imageElement.Bounds.Height)</div>
                                 </div>
                             }
                         </div>
@@ -398,10 +403,9 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     .panel-selected { border-color:#ff5722 !important; box-shadow:0 0 4px rgba(255,87,34,.6); }
     .field-item.selected { border:1px solid #ff5722; background:rgba(255,87,34,.05); }
     .editor-toolbar { position:sticky; top:0; z-index:50; background:#f8f9fa; }
-    .doc-info-pop { animation: fadeIn .12s ease-in; }
-    @@keyframes fadeIn { from { opacity:0; transform:translateY(-4px);} to { opacity:1; transform:translateY(0);} }
     .btn-xs{ padding:.15rem .35rem; font-size:.65rem; line-height:1; }
     .btn-toggle{ border:0; background:transparent; padding:0; }
     .style-btn { padding:.1rem .35rem; font-size:.65rem; }
     .style-active { background:#ff5722; color:#fff; }
+    .input-group-text{ background:#f1f1f1; }
 </style>
