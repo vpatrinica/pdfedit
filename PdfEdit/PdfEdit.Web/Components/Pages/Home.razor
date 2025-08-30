@@ -70,11 +70,13 @@
         <div class="row g-3">
             <div class="col-lg-9">
                 <div id="pdfPreviewViewer" style="height:750px;overflow:auto;border:1px solid #ccc;position:relative;">
-                    <canvas id="pdfPreviewCanvas" style="width:100%;display:block;"></canvas>
-                    <div id="clickLayer" style="position:absolute;inset:0;cursor:crosshair;background:transparent;"></div>
+                    <div style="position:relative;display:inline-block;">
+                        <canvas id="pdfPreviewCanvas" style="width:100%;display:block;"></canvas>
+                        <div id="clickLayer" style="position:absolute;inset:0;cursor:crosshair;background:transparent;"></div>
+                    </div>
                     @if (_isPreviewing)
                     {
-                        <div class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background:rgba(255,255,255,.6);"><div class="spinner-border" role="status"></div></div>
+                        <div class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background:rgba(255,255,255,.6);pointer-events:none;"><div class="spinner-border" role="status"></div></div>
                     }
                 </div>
             </div>
@@ -131,33 +133,18 @@
                                         </div>
                                     </div>
                                     <input class="form-control form-control-sm mb-1" placeholder="Text" @bind="textElement.Text" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
-                                    <!-- Row: X Y L H -->
                                     <div class="row g-1 mb-1">
-                                        <div class="col-3">
-                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">X</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
-                                        </div>
-                                        <div class="col-3">
-                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">Y</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
-                                        </div>
-                                        <div class="col-3">
-                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">L</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                        </div>
-                                        <div class="col-3">
-                                            <div class="input-group input-group-sm"><span class="input-group-text px-1">H</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
-                                        </div>
+                                        <div class="col-3"><div class="input-group input-group-sm"><span class="input-group-text px-1">X</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div></div>
+                                        <div class="col-3"><div class="input-group input-group-sm"><span class="input-group-text px-1">Y</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div></div>
+                                        <div class="col-3"><div class="input-group input-group-sm"><span class="input-group-text px-1">L</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Width" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div></div>
+                                        <div class="col-3"><div class="input-group input-group-sm"><span class="input-group-text px-1">H</span><input class="form-control form-control-sm" type="number" min="5" @bind="textElement.Bounds.Height" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div></div>
                                     </div>
-                                    <!-- Row: Font + Size + Color + Styles -->
                                     <div class="d-flex flex-wrap gap-1 align-items-stretch mb-1">
                                         <select class="form-select form-select-sm flex-grow-1" style="min-width:90px;" @bind="textElement.FontFamily" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})">
                                             @foreach (var f in _availableFonts)
-                                            {
-                                                <option value="@f">@f</option>
-                                            }
+                                            { <option value="@f">@f</option> }
                                         </select>
-                                        <div class="input-group input-group-sm" style="width:90px;">
-                                            <span class="input-group-text px-1">Sz</span>
-                                            <input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
-                                        </div>
+                                        <div class="input-group input-group-sm" style="width:90px;"><span class="input-group-text px-1">Sz</span><input class="form-control form-control-sm" type="number" min="6" max="96" @bind="textElement.FontSize" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" /></div>
                                         <input type="color" class="form-control form-control-color form-control-sm p-0" style="width:38px;" title="Color" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                         <div class="btn-group btn-group-sm ms-auto" role="group">
                                             <button class="btn btn-outline-secondary style-btn @(textElement.Bold?"style-active":"")" title="Bold" @onclick="() => ToggleBold(textElement)"><small>B</small></button>
@@ -190,7 +177,6 @@
                                             <button class="btn btn-outline-danger" title="Delete" @onclick:stopPropagation @onclick="(()=> RemoveImageElement(imageElement.Id))"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
-                                    <!-- Compact signature controls with labels: X / Y / H -->
                                     <div class="row g-1 mb-1">
                                         <div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text px-1">X</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="imageElement.Bounds.X" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.X),imageElement.Bounds.X); QueuePreviewUpdate();})" /></div></div>
                                         <div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text px-1">Y</span><input class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="imageElement.Bounds.Y" @bind:after="(()=>{UpdateImagePosition(imageElement,nameof(imageElement.Bounds.Y),imageElement.Bounds.Y); QueuePreviewUpdate();})" /></div></div>
@@ -211,188 +197,91 @@
 <InputFile @ref="_signatureFileInput" id="signatureFileInput" OnChange="OnSignatureSelected" class="d-none" accept=".png,.jpg,.jpeg" />
 
 <script>
-window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightPts){
+window.pdfEditRegisterClickLayer = function(dotNetRef,pageWidthPts,pageHeightPts){
   const layer = document.getElementById('clickLayer');
-  if(!layer) return;
-  if(layer._pdfEditBound) return; // bind once
-  layer._pdfEditBound = true;
+  const canvas = document.getElementById('pdfPreviewCanvas');
+  if(!layer || !canvas) return;
+  function sync(){
+    const rect = canvas.getBoundingClientRect();
+    layer.style.width = rect.width + 'px';
+    layer.style.height = rect.height + 'px';
+  }
+  if(!layer._ro){
+    layer._ro = new ResizeObserver(()=>sync());
+    layer._ro.observe(canvas);
+    window.addEventListener('resize', sync);
+  }
+  sync();
+  if(layer._boundDbl) return; layer._boundDbl=true;
   layer.addEventListener('dblclick', ev => {
      const rect = layer.getBoundingClientRect();
      const xPx = ev.clientX - rect.left; const yPx = ev.clientY - rect.top;
      const xPdf = xPx * (pageWidthPts / rect.width);
-     const yPdf = pageHeightPts - yPx * (pageHeightPts / rect.height); // PDF origin bottom-left
+     const yPdf = pageHeightPts - yPx * (pageHeightPts / rect.height);
      const ix = Math.round(xPdf); const iy = Math.round(yPdf);
      const label = window._activeElementLabel || 'element';
+     if(window.showPdfTarget){ try { window.showPdfTarget('pdfPreviewCanvas', xPdf, yPdf);}catch{} }
      if(confirm(`Move ${label} to X:${ix} Y:${iy}?`)){
         dotNetRef.invokeMethodAsync('MoveActiveElement', xPdf, yPdf)
-         .then(()=>console.log('Move invoked', ix, iy))
-         .catch(e=>console.error('Move error', e));
+          .catch(e=>console.error('Move error', e));
      }
   });
 };
 </script>
 
 @code {
-    // ---- State / Models ----
-    private record PaperSize(string Name,double Width,double Height); // retained (not exposed)
     private double _pageWidthPoints = 595;
     private double _pageHeightPoints = 842;
-    private string _activeElementLabel = string.Empty; // label for move prompt
-
+    private string _activeElementLabel = string.Empty;
     private PdfUploadResponse? _uploadResponse;
     private bool _pdfLoaded; private bool _isUploading; private bool _isProcessing; private bool _isPreviewing;
     private string _errorMessage = string.Empty; private string _uploadStatus = string.Empty; private string? _originalPdfBase64;
     private InputFile? _signatureFileInput;
-
     public class RichTextElement : PdfTextElement {}
     public class SignatureImageElement : PdfImageElement { public double BaseWidth { get; set; } public double BaseHeight { get; set; } }
-
     private readonly List<RichTextElement> _textElements = new();
     private readonly List<SignatureImageElement> _imageElements = new();
-    private readonly string[] _availableFonts = new[]{ "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Verdana" }; // expanded fonts
+    private readonly string[] _availableFonts = new[]{"Arial","Helvetica","Times New Roman","Courier New","Georgia","Verdana"};
     private int _currentPage = 1; private string? _activeFieldName; private string? _activeTextId; private string? _activeImageId; private CancellationTokenSource? _previewCts;
-
     private enum FieldFilter { All, TextOnly, Checkboxes }
     private FieldFilter _fieldFilter = FieldFilter.All; private string _fieldNameFilter = string.Empty;
-
     private DotNetObjectReference<Home>? _dotNetRef;
-
+    private bool _showInfo; private bool _collapseFields; private bool _collapseTexts; private bool _collapseImages;
     private bool _hasDynamicPageSizes => _uploadResponse?.PageDimensions?.Any(d=>d.Width>0 && d.Height>0) == true;
-
-    private static string BaseName(string name) => name.Contains('#') ? name.Split('#')[0] : name;
+    private static string BaseName(string name)=> name.Contains('#')?name.Split('#')[0]:name;
     private static double Clamp(double v,double min,double max)=> v<min?min:(v>max?max:v);
-
-    private void UpdateCurrentPageSize()
-    {
-        if (_hasDynamicPageSizes && _uploadResponse != null)
-        {
-            var dim = _uploadResponse.PageDimensions.FirstOrDefault(d=>d.PageNumber==_currentPage);
-            if (dim != null && dim.Width > 0 && dim.Height > 0)
-            {
-                _pageWidthPoints = dim.Width;
-                _pageHeightPoints = dim.Height;
-                foreach(var t in _textElements.Where(t=>t.PageNumber==_currentPage))
-                { t.Bounds.X = Clamp(t.Bounds.X,0,_pageWidthPoints - Math.Max(5,t.Bounds.Width)); t.Bounds.Y = Clamp(t.Bounds.Y,0,_pageHeightPoints - Math.Max(5,t.Bounds.Height)); }
-                foreach(var i in _imageElements.Where(i=>i.PageNumber==_currentPage))
-                { i.Bounds.X = Clamp(i.Bounds.X,0,_pageWidthPoints - Math.Max(5,i.Bounds.Width)); i.Bounds.Y = Clamp(i.Bounds.Y,0,_pageHeightPoints - Math.Max(5,i.Bounds.Height)); }
-            }
-        }
-    }
-
-    [JSInvokable]
-    public Task MoveActiveElement(double xPdf, double yPdf)
-    {
-        var newX = (int)Math.Round(xPdf); var newY = (int)Math.Round(yPdf);
-        if (_activeTextId == null && _activeImageId == null)
-        {
-            var lastText = _textElements.LastOrDefault(t=>t.PageNumber==_currentPage);
-            if (lastText != null) _activeTextId = lastText.Id; else { var lastImg = _imageElements.LastOrDefault(i=>i.PageNumber==_currentPage); if (lastImg != null) _activeImageId = lastImg.Id; }
-        }
-        if (_activeTextId != null)
-        {
-            var t = _textElements.FirstOrDefault(x=>x.Id==_activeTextId);
-            if (t != null) { t.Bounds.X = Clamp(newX,0,_pageWidthPoints - t.Bounds.Width); t.Bounds.Y = Clamp(newY,0,_pageHeightPoints - t.Bounds.Height); }
-        }
-        else if (_activeImageId != null)
-        {
-            var img = _imageElements.FirstOrDefault(x=>x.Id==_activeImageId);
-            if (img != null) { img.Bounds.X = Clamp(newX,0,_pageWidthPoints - img.Bounds.Width); img.Bounds.Y = Clamp(newY,0,_pageHeightPoints - img.Bounds.Height); }
-        }
-        SaveSession(); QueuePreviewUpdate(); InvokeAsync(StateHasChanged);
-        return Task.CompletedTask;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender) _dotNetRef = DotNetObjectReference.Create(this);
-        if (_pdfLoaded && _dotNetRef != null)
-        {
-            try { await JSRuntime.InvokeVoidAsync("pdfEditRegisterClickLayer", _dotNetRef, _pageWidthPoints, _pageHeightPoints); } catch { }
-        }
-    }
-    public void Dispose() => _dotNetRef?.Dispose();
-
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
-    {
-        var file = e.File; if (file == null) return;
-        _isUploading = true; _uploadStatus = "Parsing..."; _errorMessage = string.Empty; StateHasChanged();
-        try
-        {
-            using var ms = new MemoryStream();
-            await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
-            _originalPdfBase64 = Convert.ToBase64String(ms.ToArray());
-            PdfUploadResponse? serverResp = null; try { serverResp = await PdfApiService.ParsePdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server metadata failed"); }
-            if (serverResp != null) { _uploadResponse = serverResp; _uploadStatus = "Server metadata parsed"; }
-            else { _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 }; _uploadStatus = "Parsed locally"; }
-            _currentPage = 1; _pdfLoaded = true; UpdateCurrentPageSize();
-            await JSRuntime.InvokeVoidAsync("savePdfToIndexedDb", _uploadResponse.Id, _originalPdfBase64);
-            await JSRuntime.InvokeVoidAsync("setLastSessionId", _uploadResponse.Id);
-            SaveSession(); QueuePreviewUpdate();
-        }
-        catch (Exception ex) { _errorMessage = $"Parse error: {ex.Message}"; Logger.LogError(ex, "OnFileSelected"); }
-        finally { _isUploading = false; StateHasChanged(); }
-    }
-
-    private void Reset(){ if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id); _uploadResponse=null; _pdfLoaded=false; _textElements.Clear(); _imageElements.Clear(); _errorMessage=""; _uploadStatus=""; _originalPdfBase64=null; }
-
+    private void UpdateCurrentPageSize(){ if(_hasDynamicPageSizes && _uploadResponse!=null){ var dim=_uploadResponse.PageDimensions.FirstOrDefault(d=>d.PageNumber==_currentPage); if(dim!=null && dim.Width>0 && dim.Height>0){ _pageWidthPoints=dim.Width; _pageHeightPoints=dim.Height; foreach(var t in _textElements.Where(t=>t.PageNumber==_currentPage)){ t.Bounds.X=Clamp(t.Bounds.X,0,_pageWidthPoints-Math.Max(5,t.Bounds.Width)); t.Bounds.Y=Clamp(t.Bounds.Y,0,_pageHeightPoints-Math.Max(5,t.Bounds.Height)); } foreach(var i in _imageElements.Where(i=>i.PageNumber==_currentPage)){ i.Bounds.X=Clamp(i.Bounds.X,0,_pageWidthPoints-Math.Max(5,i.Bounds.Width)); i.Bounds.Y=Clamp(i.Bounds.Y,0,_pageHeightPoints-Math.Max(5,i.Bounds.Height)); } } } }
+    [JSInvokable] public Task MoveActiveElement(double xPdf,double yPdf){ var newX=(int)Math.Round(xPdf); var newY=(int)Math.Round(yPdf); if(_activeTextId==null && _activeImageId==null){ var lastText=_textElements.LastOrDefault(t=>t.PageNumber==_currentPage); if(lastText!=null) _activeTextId=lastText.Id; else { var lastImg=_imageElements.LastOrDefault(i=>i.PageNumber==_currentPage); if(lastImg!=null) _activeImageId=lastImg.Id; } } if(_activeTextId!=null){ var t=_textElements.FirstOrDefault(x=>x.Id==_activeTextId); if(t!=null){ t.Bounds.X=Clamp(newX,0,_pageWidthPoints-t.Bounds.Width); t.Bounds.Y=Clamp(newY,0,_pageHeightPoints-t.Bounds.Height);} } else if(_activeImageId!=null){ var img=_imageElements.FirstOrDefault(x=>x.Id==_activeImageId); if(img!=null){ img.Bounds.X=Clamp(newX,0,_pageWidthPoints-img.Bounds.Width); img.Bounds.Y=Clamp(newY,0,_pageHeightPoints-img.Bounds.Height);} } SaveSession(); QueuePreviewUpdate(); InvokeAsync(StateHasChanged); return Task.CompletedTask; }
+    protected override async Task OnAfterRenderAsync(bool firstRender){ if(firstRender) _dotNetRef=DotNetObjectReference.Create(this); if(_pdfLoaded && _dotNetRef!=null){ try{ await JSRuntime.InvokeVoidAsync("pdfEditRegisterClickLayer", _dotNetRef, _pageWidthPoints, _pageHeightPoints);}catch{} } }
+    public void Dispose()=> _dotNetRef?.Dispose();
+    private async Task OnFileSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null) return; _isUploading=true; _uploadStatus="Parsing..."; _errorMessage=""; StateHasChanged(); try{ using var ms=new MemoryStream(); await file.OpenReadStream(50*1024*1024).CopyToAsync(ms); _originalPdfBase64=Convert.ToBase64String(ms.ToArray()); PdfUploadResponse? serverResp=null; try{ serverResp=await PdfApiService.ParsePdfAsync(file);}catch(Exception exMeta){ Logger.LogWarning(exMeta,"Server metadata failed"); } _uploadResponse= serverResp ?? new PdfUploadResponse{ Id=Guid.NewGuid().ToString(), FileName=file.Name, PageCount=1, FormFields=new(), PageDimensions=new() }; _uploadStatus= serverResp!=null?"Server metadata parsed":"Parsed locally"; _currentPage=1; _pdfLoaded=true; UpdateCurrentPageSize(); await JSRuntime.InvokeVoidAsync("savePdfToIndexedDb", _uploadResponse.Id, _originalPdfBase64); await JSRuntime.InvokeVoidAsync("setLastSessionId", _uploadResponse.Id); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Parse error: {ex.Message}"; Logger.LogError(ex,"OnFileSelected"); } finally{ _isUploading=false; StateHasChanged(); } }
+    private void Reset(){ if(_uploadResponse!=null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id); _uploadResponse=null; _pdfLoaded=false; _textElements.Clear(); _imageElements.Clear(); _errorMessage=""; _uploadStatus=""; _originalPdfBase64=null; }
     private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", FontFamily="Arial", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); _activeTextId=t.Id; _activeImageId=null; _activeElementLabel=$"Text Block '{t.Text}' Pg({_currentPage})"; UpdateJsActiveLabel(); SaveSession(); QueuePreviewUpdate(); }
     private async Task UploadSignature(){ await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()"); }
-    private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try { using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); _activeImageId=img.Id; _activeTextId=null; _activeElementLabel=$"Signature Pg({_currentPage})"; UpdateJsActiveLabel(); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; }}
+    private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try{ using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); _activeImageId=img.Id; _activeTextId=null; _activeElementLabel=$"Signature Pg({_currentPage})"; UpdateJsActiveLabel(); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; } }
     private void OnImageHeightChanged(SignatureImageElement img, ChangeEventArgs e){ if(double.TryParse(e.Value?.ToString(), out var h)){ var aspect=(img.BaseWidth>0 && img.BaseHeight>0)? img.BaseWidth/img.BaseHeight : (img.Bounds.Width/img.Bounds.Height); h=Math.Max(5,h); var w=Math.Max(5,h*aspect); img.Bounds.Height=h; img.Bounds.Width=w; img.Bounds.X=Clamp(img.Bounds.X,0,_pageWidthPoints-img.Bounds.Width); img.Bounds.Y=Clamp(img.Bounds.Y,0,_pageHeightPoints-img.Bounds.Height); SaveSession(); QueuePreviewUpdate(); } }
     private void RemoveTextElement(string id){ _textElements.RemoveAll(t=>t.Id==id); SaveSession(); QueuePreviewUpdate(); }
     private void RemoveImageElement(string id){ _imageElements.RemoveAll(i=>i.Id==id); SaveSession(); QueuePreviewUpdate(); }
-
     private async Task SaveAndDownload(){ if(_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _isProcessing=true; try{ var req=new PdfEditRequest{ OriginalPdfBase64=_originalPdfBase64, FormFields=_uploadResponse.FormFields, TextElements=_textElements.Cast<PdfTextElement>().ToList(), ImageElements=_imageElements.Cast<PdfImageElement>().ToList() }; var resp=await PdfApiService.ProcessPdfAsync(req); if(resp.IsSuccessStatusCode){ var bytes=await resp.Content.ReadAsByteArrayAsync(); await JSRuntime.InvokeVoidAsync("downloadFile", $"edited-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", Convert.ToBase64String(bytes)); } else _errorMessage=$"Process failed: {(int)resp.StatusCode} {resp.ReasonPhrase}"; } catch(Exception ex){ _errorMessage=$"Process error: {ex.Message}"; } finally{ _isProcessing=false; } }
-
     private void SaveSession(){ if(_uploadResponse==null) return; try{ var wrapper=new { upload=_uploadResponse, texts=_textElements, images=_imageElements }; JSRuntime.InvokeVoidAsync("saveMetadata", _uploadResponse.Id, JsonSerializer.Serialize(wrapper)); } catch { } }
-
     private void QueuePreviewUpdate(){ if(!_pdfLoaded||_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _previewCts?.Cancel(); var cts=new CancellationTokenSource(); _previewCts=cts; _=Task.Run(async()=>{ try{ await Task.Delay(300,cts.Token); await InvokeAsync(UpdatePreviewAsync);} catch{} }); }
-
-    private async Task UpdatePreviewAsync(){ if(_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _isPreviewing=true; try{ var req=new PdfEditRequest{ OriginalPdfBase64=_originalPdfBase64, FormFields=_uploadResponse.FormFields, TextElements=_textElements.Cast<PdfTextElement>().ToList(), ImageElements=_imageElements.Cast<PdfImageElement>().ToList() }; var resp=await PdfApiService.ProcessPdfAsync(req); if(resp.IsSuccessStatusCode){ var bytes=await resp.Content.ReadAsByteArrayAsync(); var b64=Convert.ToBase64String(bytes); await JSRuntime.InvokeVoidAsync("renderPdfPage", b64, "pdfPreviewCanvas", _currentPage, 1.0); } else _errorMessage=$"Preview failed: {(int)resp.StatusCode}"; } catch(Exception ex){ _errorMessage=$"Preview error: {ex.Message}"; } finally{ _isPreviewing=false; StateHasChanged(); } }
-
+    private async Task UpdatePreviewAsync(){ if(_uploadResponse==null||string.IsNullOrEmpty(_originalPdfBase64)) return; _isPreviewing=true; try{ var req=new PdfEditRequest{ OriginalPdfBase64=_originalPdfBase64, FormFields=_uploadResponse.FormFields, TextElements=_textElements.Cast<PdfTextElement>().ToList(), ImageElements=_imageElements.Cast<PdfImageElement>().ToList() }; var resp=await PdfApiService.ProcessPdfAsync(req); if(resp.IsSuccessStatusCode){ var bytes=await resp.Content.ReadAsByteArrayAsync(); var b64=Convert.ToBase64String(bytes); await JSRuntime.InvokeVoidAsync("renderPdfPage", b64, "pdfPreviewCanvas", _currentPage, 1.0); await JSRuntime.InvokeVoidAsync("pdfEditRegisterClickLayer", _dotNetRef, _pageWidthPoints, _pageHeightPoints); } else _errorMessage=$"Preview failed: {(int)resp.StatusCode}"; } catch(Exception ex){ _errorMessage=$"Preview error: {ex.Message}"; } finally{ _isPreviewing=false; StateHasChanged(); } }
     private void PrevPage(){ if(_currentPage>1){ _currentPage--; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
     private void NextPage(){ if(_uploadResponse!=null && _currentPage<_uploadResponse.PageCount){ _currentPage++; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
-
     private void SelectFormField(PdfFormField f){ _activeFieldName=f.Name; if(f.PageNumber!=_currentPage){ _currentPage=f.PageNumber; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
     private void SelectTextElement(RichTextElement t){ _activeTextId=t.Id; _activeImageId=null; _activeFieldName=null; _activeElementLabel=$"Text Block '{t.Text}' Pg({_currentPage})"; UpdateJsActiveLabel(); }
     private void SelectImageElement(SignatureImageElement i){ _activeImageId=i.Id; _activeTextId=null; _activeFieldName=null; _activeElementLabel=$"Signature Pg({_currentPage})"; UpdateJsActiveLabel(); }
-
     private async Task ShowTarget(RichTextElement t)=> await ShowTargetAt(t.Bounds.X + t.Bounds.Width/2.0, t.Bounds.Y + t.Bounds.Height/2.0);
     private async Task ShowTarget(SignatureImageElement img)=> await ShowTargetAt(img.Bounds.X + img.Bounds.Width/2.0, img.Bounds.Y + img.Bounds.Height/2.0);
     private async Task ShowTarget(PdfFormField f)=> await ShowTargetAt(f.Bounds.X + f.Bounds.Width/2.0, f.Bounds.Y + f.Bounds.Height/2.0);
     private async Task ShowTargetAt(double x,double y){ try{ await JSRuntime.InvokeVoidAsync("showPdfTarget","pdfPreviewCanvas",x,y);}catch{} }
-
     private void UpdateImagePosition(SignatureImageElement i,string which,object? val){ if(double.TryParse(val?.ToString(), out var num)){ if(which.EndsWith("X")) i.Bounds.X=Clamp(num,0,_pageWidthPoints - Math.Max(5,i.Bounds.Width)); else i.Bounds.Y=Clamp(num,0,_pageHeightPoints - Math.Max(5,i.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); } }
     private void UpdateTextPosition(RichTextElement t,string which,object? val){ if(double.TryParse(val?.ToString(), out var num)){ if(which.EndsWith("X")) t.Bounds.X=Clamp(num,0,_pageWidthPoints - Math.Max(5,t.Bounds.Width)); else t.Bounds.Y=Clamp(num,0,_pageHeightPoints - Math.Max(5,t.Bounds.Height)); SaveSession(); QueuePreviewUpdate(); } }
-
     private void OnCheckboxChanged(PdfFormField field, ChangeEventArgs e){ var newVal = e.Value is bool b ? b : (bool.TryParse(e.Value?.ToString(), out var px) && px); if(newVal && field.Name.Contains('#') && _uploadResponse!=null){ var baseName=BaseName(field.Name); foreach(var f in _uploadResponse.FormFields.Where(ff=>ff!=field && BaseName(ff.Name)==baseName)) f.Value="false"; } field.Value=newVal?"true":"false"; SaveSession(); QueuePreviewUpdate(); }
-
     private bool GetCheckboxValue(PdfFormField field)=> !string.IsNullOrEmpty(field.Value) && field.Value.ToLower()!="false" && field.Value!="0";
-    private IEnumerable<PdfFormField> FilteredFields() => _uploadResponse!.FormFields
-        .Where(f=>f.PageNumber==_currentPage)
-        .Where(f=> _fieldFilter==FieldFilter.All || (_fieldFilter==FieldFilter.TextOnly && f.Type==PdfFieldType.Text) || (_fieldFilter==FieldFilter.Checkboxes && f.Type==PdfFieldType.Checkbox))
-        .Where(f=> string.IsNullOrWhiteSpace(_fieldNameFilter) || f.Name.Contains(_fieldNameFilter, StringComparison.OrdinalIgnoreCase) || BaseName(f.Name).Contains(_fieldNameFilter, StringComparison.OrdinalIgnoreCase));
-    private bool _showInfo = false; // collapsed by default
-    private bool _collapseFields = false; // keep fields expanded by default? false means open
-    private bool _collapseTexts = false;
-    private bool _collapseImages = false;
-
-    private string ThumbBoxStyle(Rectangle r)
-    {
-        var w = _pageWidthPoints <= 0 ? 1 : _pageWidthPoints;
-        var h = _pageHeightPoints <= 0 ? 1 : _pageHeightPoints;
-        double left = r.X / w * 100.0;
-        double top = (1 - (r.Y + r.Height) / h) * 100.0;
-        double width = (r.Width / w) * 100.0;
-        double height = (r.Height / h) * 100.0;
-        if (width < 1) width = 1; if (height < 1) height = 1;
-        return $"left:{left:F2}%;top:{top:F2}%;width:{width:F2}%;height:{height:F2}%;";
-    }
-
-    private async void UpdateJsActiveLabel()
-    { try { await JSRuntime.InvokeVoidAsync("eval", $"window._activeElementLabel = '{EscapeJs(_activeElementLabel)}';"); } catch { } }
-    private static string EscapeJs(string s) => s.Replace("'", "\\'");
-
+    private IEnumerable<PdfFormField> FilteredFields()=> _uploadResponse!.FormFields.Where(f=>f.PageNumber==_currentPage).Where(f=> _fieldFilter==FieldFilter.All || (_fieldFilter==FieldFilter.TextOnly && f.Type==PdfFieldType.Text) || (_fieldFilter==FieldFilter.Checkboxes && f.Type==PdfFieldType.Checkbox)).Where(f=> string.IsNullOrWhiteSpace(_fieldNameFilter) || f.Name.Contains(_fieldNameFilter,StringComparison.OrdinalIgnoreCase) || BaseName(f.Name).Contains(_fieldNameFilter,StringComparison.OrdinalIgnoreCase));
+    private async void UpdateJsActiveLabel(){ try{ await JSRuntime.InvokeVoidAsync("eval", $"window._activeElementLabel='{EscapeJs(_activeElementLabel)}';"); } catch { } }
+    private static string EscapeJs(string s)=> s.Replace("'","\\'");
     private void ToggleBold(RichTextElement t){ t.Bold=!t.Bold; SaveSession(); QueuePreviewUpdate(); }
     private void ToggleItalic(RichTextElement t){ t.Italic=!t.Italic; SaveSession(); QueuePreviewUpdate(); }
     private void ToggleUnderline(RichTextElement t){ t.Underline=!t.Underline; SaveSession(); QueuePreviewUpdate(); }
