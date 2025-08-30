@@ -80,14 +80,14 @@
             </div>
             <div class="col-lg-3">
                 <div class="mb-3">
-                    <h6 class="mb-2 d-flex align-items-center justify-content-between">
+                    <h5 class="mb-2 d-flex align-items-center justify-content-between">
                         <span class="d-flex align-items-center gap-1"><button class="btn btn-xs btn-toggle" @onclick="(()=> _collapseFields = !_collapseFields)"><i class="bi @( _collapseFields?"bi-caret-right-fill":"bi-caret-down-fill")" style="font-size:.9rem;"></i></button>Form Fields (Pg @_currentPage)</span>
                         <div class="d-flex flex-wrap gap-1">
                             <button class="btn btn-xs @( _fieldFilter==FieldFilter.All?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.All">All</button>
                             <button class="btn btn-xs @( _fieldFilter==FieldFilter.TextOnly?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.TextOnly">Text</button>
                             <button class="btn btn-xs @( _fieldFilter==FieldFilter.Checkboxes?"btn-primary":"btn-outline-secondary")" @onclick="() => _fieldFilter = FieldFilter.Checkboxes">Checkbox</button>
                         </div>
-                    </h6>
+                    </h5>
                     @if(!_collapseFields)
                     {
                         <input class="form-control form-control-sm mb-2" placeholder="Filter name/group" @bind="_fieldNameFilter" />
@@ -153,6 +153,12 @@
                                             <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
                                         </div>
                                     </div>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Bold?"style-active":"")" title="Bold" @onclick="() => ToggleBold(textElement)"><i class="bi bi-type-bold"></i></button>
+                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Italic?"style-active":"")" title="Italic" @onclick="() => ToggleItalic(textElement)"><i class="bi bi-type-italic"></i></button>
+                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Underline?"style-active":"")" title="Underline" @onclick="() => ToggleUnderline(textElement)"><i class="bi bi-type-underline"></i></button>
+                                        <button class="btn btn-xs btn-toggle style-btn @(textElement.Strike?"style-active":"")" title="Strike" @onclick="() => ToggleStrike(textElement)"><i class="bi bi-type-strikethrough"></i></button>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -211,7 +217,8 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
      const xPdf = xPx * (pageWidthPts / rect.width);
      const yPdf = pageHeightPts - yPx * (pageHeightPts / rect.height); // PDF origin bottom-left
      const ix = Math.round(xPdf); const iy = Math.round(yPdf);
-     if(confirm(`Move selected element to X:${ix} Y:${iy}?`)){
+     const label = window._activeElementLabel || 'element';
+     if(confirm(`Move ${label} to X:${ix} Y:${iy}?`)){
         dotNetRef.invokeMethodAsync('MoveActiveElement', xPdf, yPdf)
          .then(()=>console.log('Move invoked', ix, iy))
          .catch(e=>console.error('Move error', e));
@@ -225,6 +232,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     private record PaperSize(string Name,double Width,double Height); // retained (not exposed)
     private double _pageWidthPoints = 595;
     private double _pageHeightPoints = 842;
+    private string _activeElementLabel = string.Empty; // label for move prompt
 
     private PdfUploadResponse? _uploadResponse;
     private bool _pdfLoaded; private bool _isUploading; private bool _isProcessing; private bool _isPreviewing;
@@ -236,7 +244,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private readonly List<RichTextElement> _textElements = new();
     private readonly List<SignatureImageElement> _imageElements = new();
-    private readonly string[] _availableFonts = new[]{ "Arial", "Times New Roman", "Courier New" }; // limited to standard 14 mapped fonts
+    private readonly string[] _availableFonts = new[]{ "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Verdana" }; // expanded fonts
     private int _currentPage = 1; private string? _activeFieldName; private string? _activeTextId; private string? _activeImageId; private CancellationTokenSource? _previewCts;
 
     private enum FieldFilter { All, TextOnly, Checkboxes }
@@ -322,9 +330,9 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private void Reset(){ if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id); _uploadResponse=null; _pdfLoaded=false; _textElements.Clear(); _imageElements.Clear(); _errorMessage=""; _uploadStatus=""; _originalPdfBase64=null; }
 
-    private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", FontFamily="Arial", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); SaveSession(); QueuePreviewUpdate(); }
+    private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", FontFamily="Arial", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); _activeTextId=t.Id; _activeImageId=null; _activeElementLabel=$"Text Block '{t.Text}' Pg({_currentPage})"; UpdateJsActiveLabel(); SaveSession(); QueuePreviewUpdate(); }
     private async Task UploadSignature(){ await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()"); }
-    private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try { using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; }}
+    private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try { using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); _activeImageId=img.Id; _activeTextId=null; _activeElementLabel=$"Signature Pg({_currentPage})"; UpdateJsActiveLabel(); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; }}
     private void OnImageHeightChanged(SignatureImageElement img, ChangeEventArgs e){ if(double.TryParse(e.Value?.ToString(), out var h)){ var aspect=(img.BaseWidth>0 && img.BaseHeight>0)? img.BaseWidth/img.BaseHeight : (img.Bounds.Width/img.Bounds.Height); h=Math.Max(5,h); var w=Math.Max(5,h*aspect); img.Bounds.Height=h; img.Bounds.Width=w; img.Bounds.X=Clamp(img.Bounds.X,0,_pageWidthPoints-img.Bounds.Width); img.Bounds.Y=Clamp(img.Bounds.Y,0,_pageHeightPoints-img.Bounds.Height); SaveSession(); QueuePreviewUpdate(); } }
     private void RemoveTextElement(string id){ _textElements.RemoveAll(t=>t.Id==id); SaveSession(); QueuePreviewUpdate(); }
     private void RemoveImageElement(string id){ _imageElements.RemoveAll(i=>i.Id==id); SaveSession(); QueuePreviewUpdate(); }
@@ -341,8 +349,8 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     private void NextPage(){ if(_uploadResponse!=null && _currentPage<_uploadResponse.PageCount){ _currentPage++; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
 
     private void SelectFormField(PdfFormField f){ _activeFieldName=f.Name; if(f.PageNumber!=_currentPage){ _currentPage=f.PageNumber; UpdateCurrentPageSize(); QueuePreviewUpdate(); } }
-    private void SelectTextElement(RichTextElement t){ _activeTextId=t.Id; _activeImageId=null; _activeFieldName=null; }
-    private void SelectImageElement(SignatureImageElement i){ _activeImageId=i.Id; _activeTextId=null; _activeFieldName=null; }
+    private void SelectTextElement(RichTextElement t){ _activeTextId=t.Id; _activeImageId=null; _activeFieldName=null; _activeElementLabel=$"Text Block '{t.Text}' Pg({_currentPage})"; UpdateJsActiveLabel(); }
+    private void SelectImageElement(SignatureImageElement i){ _activeImageId=i.Id; _activeTextId=null; _activeFieldName=null; _activeElementLabel=$"Signature Pg({_currentPage})"; UpdateJsActiveLabel(); }
 
     private async Task ShowTarget(RichTextElement t)=> await ShowTargetAt(t.Bounds.X + t.Bounds.Width/2.0, t.Bounds.Y + t.Bounds.Height/2.0);
     private async Task ShowTarget(SignatureImageElement img)=> await ShowTargetAt(img.Bounds.X + img.Bounds.Width/2.0, img.Bounds.Y + img.Bounds.Height/2.0);
@@ -375,6 +383,15 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
         if (width < 1) width = 1; if (height < 1) height = 1;
         return $"left:{left:F2}%;top:{top:F2}%;width:{width:F2}%;height:{height:F2}%;";
     }
+
+    private async void UpdateJsActiveLabel()
+    { try { await JSRuntime.InvokeVoidAsync("eval", $"window._activeElementLabel = '{EscapeJs(_activeElementLabel)}';"); } catch { } }
+    private static string EscapeJs(string s) => s.Replace("'", "\\'");
+
+    private void ToggleBold(RichTextElement t){ t.Bold=!t.Bold; SaveSession(); QueuePreviewUpdate(); }
+    private void ToggleItalic(RichTextElement t){ t.Italic=!t.Italic; SaveSession(); QueuePreviewUpdate(); }
+    private void ToggleUnderline(RichTextElement t){ t.Underline=!t.Underline; SaveSession(); QueuePreviewUpdate(); }
+    private void ToggleStrike(RichTextElement t){ t.Strike=!t.Strike; SaveSession(); QueuePreviewUpdate(); }
 }
 
 <style>
@@ -385,4 +402,6 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
     @@keyframes fadeIn { from { opacity:0; transform:translateY(-4px);} to { opacity:1; transform:translateY(0);} }
     .btn-xs{ padding:.15rem .35rem; font-size:.65rem; line-height:1; }
     .btn-toggle{ border:0; background:transparent; padding:0; }
+    .style-btn { padding:.1rem .35rem; font-size:.65rem; }
+    .style-active { background:#ff5722; color:#fff; }
 </style>

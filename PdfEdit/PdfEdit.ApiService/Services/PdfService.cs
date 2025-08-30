@@ -15,6 +15,7 @@ using SharedPdfFormField = PdfEdit.Shared.Models.PdfFormField;
 using iText.Kernel.Font; // font selection
 using iText.IO.Font.Constants;
 using iText.IO.Font; // PdfEncodings if needed
+using iText.Layout.Properties;
 
 namespace PdfEdit.Api.Services;
 
@@ -334,8 +335,10 @@ public class PdfService : IPdfService
             var p = new Paragraph(t.Text)
                 .SetFontSize(t.FontSize)
                 .SetFixedPosition(t.PageNumber, (float)t.Bounds.X, (float)t.Bounds.Y, (float)(t.Bounds.Width <= 0 ? 200 : t.Bounds.Width));
-            var font = ResolveFont(t.FontFamily); // new instance each time
+            var font = ResolveFont(t.FontFamily, t.Bold, t.Italic);
             if (font != null) p.SetFont(font);
+            if (t.Underline) p.SetUnderline();
+            if (t.Strike) p.SetLineThrough();
             var color = TryParseColor(t.Color);
             if (color is not null) p.SetFontColor(color);
             doc.Add(p);
@@ -343,15 +346,14 @@ public class PdfService : IPdfService
         catch (Exception ex) { _logger.LogWarning(ex, "Add text failed {Id}", t.Id); }
     }
 
-    private PdfFont? ResolveFont(string? family)
+    private PdfFont? ResolveFont(string? family, bool bold, bool italic)
     {
         try
         {
             var key = (family ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(key)) key = "Arial"; // default
+            if (string.IsNullOrWhiteSpace(key)) key = "Arial";
             key = key.ToLowerInvariant();
-            // Map common names to standard fonts (avoids embedding external fonts)
-            string std = key switch
+            string baseStd = key switch
             {
                 "arial" => StandardFonts.HELVETICA,
                 "helvetica" => StandardFonts.HELVETICA,
@@ -361,10 +363,30 @@ public class PdfService : IPdfService
                 "courier new" => StandardFonts.COURIER,
                 "symbol" => StandardFonts.SYMBOL,
                 "zapfdingbats" => StandardFonts.ZAPFDINGBATS,
+                "georgia" => StandardFonts.TIMES_ROMAN,
+                "verdana" => StandardFonts.HELVETICA,
                 _ => StandardFonts.HELVETICA
             };
-            // Return a fresh font instance (do not cache PdfFont objects across documents)
-            return PdfFontFactory.CreateFont(std);
+            // iText standard fonts treat bold/italic as separate font instances; pick closest.
+            if (baseStd == StandardFonts.HELVETICA)
+            {
+                if (bold && italic) return PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLDOBLIQUE);
+                if (bold) return PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+                if (italic) return PdfFontFactory.CreateFont(StandardFonts.HELVETICA_OBLIQUE);
+            }
+            if (baseStd == StandardFonts.TIMES_ROMAN)
+            {
+                if (bold && italic) return PdfFontFactory.CreateFont(StandardFonts.TIMES_BOLDITALIC);
+                if (bold) return PdfFontFactory.CreateFont(StandardFonts.TIMES_BOLD);
+                if (italic) return PdfFontFactory.CreateFont(StandardFonts.TIMES_ITALIC);
+            }
+            if (baseStd == StandardFonts.COURIER)
+            {
+                if (bold && italic) return PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLDOBLIQUE);
+                if (bold) return PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
+                if (italic) return PdfFontFactory.CreateFont(StandardFonts.COURIER_OBLIQUE);
+            }
+            return PdfFontFactory.CreateFont(baseStd);
         }
         catch (Exception ex)
         {

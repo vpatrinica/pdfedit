@@ -44,6 +44,11 @@ public class PdfTextElement
     public string FontFamily { get; set; } = "Arial";
     public int FontSize { get; set; } = 12;
     public string Color { get; set; } = "#000000";
+    // New style flags
+    public bool Bold { get; set; }
+    public bool Italic { get; set; }
+    public bool Underline { get; set; }
+    public bool Strike { get; set; }
 }
 
 public class PdfImageElement
