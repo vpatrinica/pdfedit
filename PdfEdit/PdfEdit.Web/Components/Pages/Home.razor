@@ -14,7 +14,7 @@
 <div class="container-fluid">
     @if (_uploadResponse == null)
     {
-        <!-- Upload view (simplified) -->
+        <!-- Parse view (simplified) -->
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card"><div class="card-body">
@@ -140,7 +140,19 @@
                                         <div class="col-6"><input placeholder="X" class="form-control form-control-sm" type="number" min="0" max="@_pageWidthPoints" @bind="textElement.Bounds.X" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.X),textElement.Bounds.X); QueuePreviewUpdate();})" /></div>
                                         <div class="col-6"><input placeholder="Y" class="form-control form-control-sm" type="number" min="0" max="@_pageHeightPoints" @bind="textElement.Bounds.Y" @bind:after="(()=>{UpdateTextPosition(textElement,nameof(textElement.Bounds.Y),textElement.Bounds.Y); QueuePreviewUpdate();})" /></div>
                                     </div>
-                                    <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-7">
+                                            <select class="form-select form-select-sm" @bind="textElement.FontFamily" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})">
+                                                @foreach (var f in _availableFonts)
+                                                {
+                                                    <option value="@f">@f</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-5">
+                                            <input type="color" class="form-control form-control-color form-control-sm" style="padding:0;" @bind="textElement.Color" @bind:after="(()=>{SaveSession(); QueuePreviewUpdate();})" />
+                                        </div>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -224,6 +236,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private readonly List<RichTextElement> _textElements = new();
     private readonly List<SignatureImageElement> _imageElements = new();
+    private readonly string[] _availableFonts = new[]{ "Arial", "Times New Roman", "Courier New" }; // limited to standard 14 mapped fonts
     private int _currentPage = 1; private string? _activeFieldName; private string? _activeTextId; private string? _activeImageId; private CancellationTokenSource? _previewCts;
 
     private enum FieldFilter { All, TextOnly, Checkboxes }
@@ -295,7 +308,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
             using var ms = new MemoryStream();
             await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
             _originalPdfBase64 = Convert.ToBase64String(ms.ToArray());
-            PdfUploadResponse? serverResp = null; try { serverResp = await PdfApiService.UploadPdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server metadata failed"); }
+            PdfUploadResponse? serverResp = null; try { serverResp = await PdfApiService.ParsePdfAsync(file); } catch (Exception exMeta) { Logger.LogWarning(exMeta, "Server metadata failed"); }
             if (serverResp != null) { _uploadResponse = serverResp; _uploadStatus = "Server metadata parsed"; }
             else { _uploadResponse = new PdfUploadResponse { Id = Guid.NewGuid().ToString(), FileName = file.Name, PageCount = 1 }; _uploadStatus = "Parsed locally"; }
             _currentPage = 1; _pdfLoaded = true; UpdateCurrentPageSize();
@@ -309,7 +322,7 @@ window.pdfEditRegisterClickLayer = function(dotNetRef, pageWidthPts, pageHeightP
 
     private void Reset(){ if (_uploadResponse != null) JSRuntime.InvokeVoidAsync("clearMetadata", _uploadResponse.Id); _uploadResponse=null; _pdfLoaded=false; _textElements.Clear(); _imageElements.Clear(); _errorMessage=""; _uploadStatus=""; _originalPdfBase64=null; }
 
-    private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); SaveSession(); QueuePreviewUpdate(); }
+    private void AddTextBox(){ var t=new RichTextElement{ Id=Guid.NewGuid().ToString(), Text="New Text", PageNumber=_currentPage, FontSize=14, Color="#000000", FontFamily="Arial", Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-70, Width=200, Height=20 } }; _textElements.Add(t); SaveSession(); QueuePreviewUpdate(); }
     private async Task UploadSignature(){ await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('signatureFileInput').click()"); }
     private async Task OnSignatureSelected(InputFileChangeEventArgs e){ var file=e.File; if(file==null)return; try { using var s=file.OpenReadStream(5*1024*1024); using var ms=new MemoryStream(); await s.CopyToAsync(ms); var data=Convert.ToBase64String(ms.ToArray()); var img=new SignatureImageElement{ Id=Guid.NewGuid().ToString(), ImageData=data, PageNumber=_currentPage, Bounds=new Rectangle{ X=50, Y=_pageHeightPoints-150, Width=100, Height=50 }, BaseWidth=100, BaseHeight=50 }; _imageElements.Add(img); SaveSession(); QueuePreviewUpdate(); } catch(Exception ex){ _errorMessage=$"Signature error: {ex.Message}"; }}
     private void OnImageHeightChanged(SignatureImageElement img, ChangeEventArgs e){ if(double.TryParse(e.Value?.ToString(), out var h)){ var aspect=(img.BaseWidth>0 && img.BaseHeight>0)? img.BaseWidth/img.BaseHeight : (img.Bounds.Width/img.Bounds.Height); h=Math.Max(5,h); var w=Math.Max(5,h*aspect); img.Bounds.Height=h; img.Bounds.Width=w; img.Bounds.X=Clamp(img.Bounds.X,0,_pageWidthPoints-img.Bounds.Width); img.Bounds.Y=Clamp(img.Bounds.Y,0,_pageHeightPoints-img.Bounds.Height); SaveSession(); QueuePreviewUpdate(); } }

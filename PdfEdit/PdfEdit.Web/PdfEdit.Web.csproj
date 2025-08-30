@@ -14,8 +14,4 @@
     <Compile Include="..\PdfEdit.Shared\PdfModels.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="9.4.1" />
-  </ItemGroup>
-
 </Project>

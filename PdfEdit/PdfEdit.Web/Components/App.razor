@@ -53,22 +53,8 @@
 
         function _base64ToUint8Array(base64) { const raw = atob(base64); const bytes = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i); return bytes; }
 
-        window.renderPdf = function (base64Data, canvasId, attempt = 0) {
-            if (!window.pdfjsLib) { if (attempt > 80) { console.error('pdf.js not ready'); return; } return setTimeout(() => window.renderPdf(base64Data, canvasId, attempt + 1), 250); }
-            (async () => {
-                try {
-                    const data = _base64ToUint8Array(base64Data);
-                    const pdf = await window.pdfjsLib.getDocument({ data }).promise;
-                    window._pdfedit_lastDoc = data;
-                    const page = await pdf.getPage(1);
-                    const canvas = document.getElementById(canvasId); if (!canvas) return;
-                    const viewport = page.getViewport({ scale: 1.15 });
-                    canvas.width = viewport.width; canvas.height = viewport.height;
-                    window._lastPdfScale = viewport.scale; window._lastPdfHeight = canvas.height;
-                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-                } catch (e) { console.error('PDF render error', e); }
-            })();
-        };
+        // Remaining helpers: renderPdfPage, downloadFile, metadata/local storage, showPdfTarget
+        // Removed unused helpers: renderPdf, renderPdfEnsure, enableDragForOverlays, getCanvasWidth, getCanvasInfo, getImageHeight, getImageWidth, loadPdfMeta, getOverlaySize, showPdf
 
         window.renderPdfPage = async function (base64Data, canvasId, pageNumber, scale = 1.15) {
             try {
@@ -85,42 +71,7 @@
             } catch (e) { console.error('renderPdfPage error', e); }
         };
 
-        window.renderPdfEnsure = function (base64Data, canvasId) {
-            let attempts = 0; (function attempt() { if (window.pdfjsLib) { window.renderPdf(base64Data, canvasId); } else if (attempts++ < 120) { setTimeout(attempt, 250); } else { console.error('pdf.js not loaded after waiting'); } })();
-        };
-
-        window.loadPdfMeta = async function (base64) {
-            try { if (!window.pdfjsLib) { await new Promise(r => setTimeout(r, 250)); return await window.loadPdfMeta(base64); } const data = _base64ToUint8Array(base64); const pdf = await window.pdfjsLib.getDocument({ data }).promise; return { pageCount: pdf.numPages }; }
-            catch (e) { console.error('loadPdfMeta error', e); return { pageCount: 1 }; }
-        };
-
-        window.getCanvasWidth = id => { const c = document.getElementById(id); return c ? c.width : 0; };
-        window.getCanvasInfo = id => { const c = document.getElementById(id); return { width: c ? c.width : 0, height: c ? c.height : 0, scale: window._lastPdfScale || 1 }; };
-        window.getImageHeight = id => { const img = document.getElementById(id); return img ? img.naturalHeight : 0; };
-        window.getImageWidth = id => { const img = document.getElementById(id); return img ? img.naturalWidth : 0; };
-
         window.downloadFile = (fileName, base64) => { const link = document.createElement('a'); link.href = 'data:application/pdf;base64,' + base64; link.download = fileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-
-        window.enableDragForOverlays = (containerId, dotNetRef) => {
-            const container = document.getElementById(containerId); if (!container) return;
-            container.querySelectorAll('.pdf-overlay-item').forEach(el => {
-                el.onpointerdown = e => {
-                    if (e.target.classList.contains('resize-handle')) return;
-                    el.setPointerCapture(e.pointerId);
-                    const startX = e.clientX, startY = e.clientY;
-                    const origLeft = parseFloat(el.style.left) || 0, origTop = parseFloat(el.style.top) || 0;
-                    el.onpointermove = mv => { const dx = mv.clientX - startX, dy = mv.clientY - startY; el.style.left = (origLeft + dx) + 'px'; el.style.top = (origTop + dy) + 'px'; };
-                    el.onpointerup = () => { el.onpointermove = null; dotNetRef.invokeMethodAsync('OnOverlayMoved', el.dataset.id, parseFloat(el.style.left), parseFloat(el.style.top)); };
-                };
-                if (!el.querySelector('.resize-handle')) {
-                    const h = document.createElement('div'); h.className = 'resize-handle'; h.style.cssText = 'position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#0d6efd;border:1px solid #fff;border-radius:2px;cursor:se-resize;'; el.appendChild(h);
-                    h.onpointerdown = e => { e.stopPropagation(); h.setPointerCapture(e.pointerId); const startX = e.clientX, startY = e.clientY; const startW = el.offsetWidth, startH = el.offsetHeight; h.onpointermove = mv => { const dx = mv.clientX - startX, dy = mv.clientY - startY; el.style.width = Math.max(20, startW + dx) + 'px'; el.style.height = Math.max(20, startH + dy) + 'px'; }; h.onpointerup = () => { h.onpointermove = null; dotNetRef.invokeMethodAsync('OnOverlayResized', el.dataset.id, el.offsetWidth, el.offsetHeight); }; };
-                }
-            });
-        };
-
-        window.getOverlaySize = id => { const el = document.querySelector('.pdf-overlay-item[data-id="' + id + '"]'); return el ? { w: el.offsetWidth, h: el.offsetHeight } : { w: 0, h: 0 }; };
-        window.showPdf = base64 => { const frame = document.getElementById('pdfFrame'); if (frame) frame.src = 'data:application/pdf;base64,' + base64; };
 
         // IndexedDB + localStorage helpers
         const DB_NAME = 'pdfedit-db'; const STORE = 'pdfs'; let dbPromise = null;

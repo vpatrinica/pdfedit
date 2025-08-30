@@ -7,7 +7,7 @@ namespace PdfEdit.Client.Services;
 
 public interface IPdfApiService
 {
-    Task<PdfUploadResponse?> UploadPdfAsync(IBrowserFile file);
+    Task<PdfUploadResponse?> ParsePdfAsync(IBrowserFile file);
     Task<HttpResponseMessage> ProcessPdfAsync(PdfEditRequest request);
     Task<byte[]> GetOriginalPdfAsync(string documentId);
 }
@@ -23,7 +23,7 @@ public class PdfApiService : IPdfApiService
         _logger = logger;
     }
 
-    public async Task<PdfUploadResponse?> UploadPdfAsync(IBrowserFile file)
+    public async Task<PdfUploadResponse?> ParsePdfAsync(IBrowserFile file)
     {
         try
         {
@@ -32,7 +32,7 @@ public class PdfApiService : IPdfApiService
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
             content.Add(fileContent, "file", file.Name);
 
-            var response = await _httpClient.PostAsync("api/pdf/upload", content);
+            var response = await _httpClient.PostAsync("api/pdf/parse", content);
             
             if (response.IsSuccessStatusCode)
             {
@@ -44,14 +44,14 @@ public class PdfApiService : IPdfApiService
             }
             else
             {
-                _logger.LogError("Failed to upload PDF. Status: {StatusCode}, Content: {Content}", 
+                _logger.LogError("Failed to parse PDF. Status: {StatusCode}, Content: {Content}", 
                     response.StatusCode, await response.Content.ReadAsStringAsync());
                 return null;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error uploading PDF file: {FileName}", file.Name);
+            _logger.LogError(ex, "Error parsing PDF file: {FileName}", file.Name);
             return null;
         }
     }

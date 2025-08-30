@@ -12,6 +12,9 @@ using Microsoft.Extensions.Logging;
 using PdfEdit.Shared.Models;
 using RectangleModel = PdfEdit.Shared.Models.Rectangle;
 using SharedPdfFormField = PdfEdit.Shared.Models.PdfFormField;
+using iText.Kernel.Font; // font selection
+using iText.IO.Font.Constants;
+using iText.IO.Font; // PdfEncodings if needed
 
 namespace PdfEdit.Api.Services;
 
@@ -36,15 +39,15 @@ public class PdfService : IPdfService
         using var pdfDoc = new PdfDocument(reader);
         resp.PageCount = pdfDoc.GetNumberOfPages();
         // Populate per-page dimensions (points)
-        for(int p=1; p<=resp.PageCount; p++)
+        for (int p = 1; p <= resp.PageCount; p++)
         {
             try
             {
                 var page = pdfDoc.GetPage(p);
                 var size = page.GetPageSize();
-                resp.PageDimensions.Add(new PageDimension{ PageNumber=p, Width=size.GetWidth(), Height=size.GetHeight() });
+                resp.PageDimensions.Add(new PageDimension { PageNumber = p, Width = size.GetWidth(), Height = size.GetHeight() });
             }
-            catch { resp.PageDimensions.Add(new PageDimension{ PageNumber=p, Width=0, Height=0 }); }
+            catch { resp.PageDimensions.Add(new PageDimension { PageNumber = p, Width = 0, Height = 0 }); }
         }
         var form = PdfAcroForm.GetAcroForm(pdfDoc, false);
         if (form != null)
@@ -92,8 +95,8 @@ public class PdfService : IPdfService
         using var output = new MemoryStream();
         using var reader = new PdfReader(input);
         using var writer = new PdfWriter(output);
-        using var pdfDoc = new PdfDocument(reader, writer);
-        using var doc = new Document(pdfDoc);
+        var pdfDoc = new PdfDocument(reader, writer);
+        var doc = new Document(pdfDoc);
 
         var form = PdfAcroForm.GetAcroForm(pdfDoc, true);
         if (form != null)
@@ -141,7 +144,9 @@ public class PdfService : IPdfService
         foreach (var t in request.TextElements) AddTextElement(doc, pdfDoc, t);
         foreach (var img in request.ImageElements) AddImageElement(doc, pdfDoc, img);
 
+        // Closing the document once; this also closes pdfDoc and flushes content.
         doc.Close();
+
         await Task.CompletedTask;
         return output.ToArray();
     }
@@ -329,11 +334,43 @@ public class PdfService : IPdfService
             var p = new Paragraph(t.Text)
                 .SetFontSize(t.FontSize)
                 .SetFixedPosition(t.PageNumber, (float)t.Bounds.X, (float)t.Bounds.Y, (float)(t.Bounds.Width <= 0 ? 200 : t.Bounds.Width));
+            var font = ResolveFont(t.FontFamily); // new instance each time
+            if (font != null) p.SetFont(font);
             var color = TryParseColor(t.Color);
             if (color is not null) p.SetFontColor(color);
             doc.Add(p);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Add text failed {Id}", t.Id); }
+    }
+
+    private PdfFont? ResolveFont(string? family)
+    {
+        try
+        {
+            var key = (family ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(key)) key = "Arial"; // default
+            key = key.ToLowerInvariant();
+            // Map common names to standard fonts (avoids embedding external fonts)
+            string std = key switch
+            {
+                "arial" => StandardFonts.HELVETICA,
+                "helvetica" => StandardFonts.HELVETICA,
+                "times" => StandardFonts.TIMES_ROMAN,
+                "times new roman" => StandardFonts.TIMES_ROMAN,
+                "courier" => StandardFonts.COURIER,
+                "courier new" => StandardFonts.COURIER,
+                "symbol" => StandardFonts.SYMBOL,
+                "zapfdingbats" => StandardFonts.ZAPFDINGBATS,
+                _ => StandardFonts.HELVETICA
+            };
+            // Return a fresh font instance (do not cache PdfFont objects across documents)
+            return PdfFontFactory.CreateFont(std);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ResolveFont fallback to Helvetica");
+            try { return PdfFontFactory.CreateFont(StandardFonts.HELVETICA); } catch { return null; }
+        }
     }
 
     private Color? TryParseColor(string? hex)

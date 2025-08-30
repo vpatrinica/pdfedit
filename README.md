@@ -1,62 +1,122 @@
-# PDF Editor
+﻿# PDF Editor (2025)
 
-A self-hosted .NET 8 PDF editing web application. Upload, edit, annotate (text + signatures) and download PDFs. Now runs via a single AppHost (Aspire) process that orchestrates the API service and Blazor Server frontend.
+Light-weight self-hosted PDF form editor built with .NET 8 (Blazor Server + minimal ASP.NET Core API). Upload a PDF, inspect / edit form fields, inject custom text boxes & signature images, then download a flattened result.
+
+> Rendering: Client-side page rendering uses pdf.js (loaded dynamically with CDN fallback). If pdf.js fails to load, a lightweight placeholder is shown until it becomes available.
 
 ## Recent Changes
 - Switched to Aspire AppHost (run PdfEdit.AppHost to start everything: web + api + Redis cache)
 - Fixed text color rendering (hex colors now respected in generated PDF)
 - Added Target button for text elements: shows crosshair + concentric circles (radii 5,7,10) at element center for quick coordinate verification
+- Renamed endpoint POST /api/pdf/upload -> POST /api/pdf/parse (code & docs)
+- Added font selection for text elements (Arial, Times New Roman, Courier New mapped to core PDF fonts)
 
-## Features
-- PDF Upload & Rendering (client-side pdf.js)
-- Form Field Editing (text / checkbox)
-- Add / Move / Resize Text Elements (font size, color)
-- Signature Image Placement
-- Live Preview (server-flattened)
-- Coordinate Target Visualization (one-shot overlay)
-- Save & Download final flattened PDF
+## Feature Matrix
+| Area | Capability | Notes |
+|------|------------|-------|
+| Upload | Single PDF up to 50 MB | Stored transiently in memory (per session) |
+| Form Extraction | Text, checkbox (group splitting), combo/radio (treated generic) | Checkbox groups exposed as Name#1, Name#2 ... |
+| Field Editing | Change text field values; toggle checkboxes | Radio groups handled as checkbox style; flattened |
+| Text Elements | Add arbitrary text (content, font size, width/height, color, font family) | PDF point coordinate space |
+| Signatures | Upload PNG/JPG; position & size (height scaling) | Stored Base64 + Blob (IndexedDB) with hash de-dup |
+| Coordinate Tools | Double-click canvas moves active element; Locate (+) crosshair | Crosshair auto clears after 2 s |
+| Session Persistence | IndexedDB (PDF + signatures), LocalStorage (metadata) | Restores last session id |
+| Processing | iText7 flatten: apply fields + text + images | Output is flattened (non-editable) |
+| Rendering | pdf.js page raster (client) | Dynamic loader with multi-CDN fallback |
+| Cleanup | Signature ref counting (release on delete / reset) | Prevents orphan blobs |
+
+## Non-Goals (Current)
+- Multi-PDF batch operations
+- Undo/redo stack
 
 ## Technology Stack
-- Backend: ASP.NET Core Web API (.NET 8) + iText7
-- Frontend: Blazor Server (interactive) using pdf.js for display
-- Orchestration: .NET Aspire AppHost (web + api + Redis)
-- Caching: Redis (via Aspire integration)
+| Layer | Tech |
+|-------|------|
+| UI | Blazor Server (.NET 8), Bootstrap 5, Bootstrap Icons |
+| PDF Processing | iText7 (forms + stamping) |
+| Client Rendering | pdf.js (browser) |
+| Imaging | SixLabors.ImageSharp (extensible) |
+| Persistence | Memory (server) + IndexedDB/LocalStorage (browser) |
+| Orchestration | Optional .NET Aspire AppHost |
 
-## Quick Start (AppHost)
-1. Clone repository
-2. Build solution: `dotnet build`
-3. Run: `dotnet run --project PdfEdit.AppHost`
-4. Open browser at the web endpoint shown (typically https://localhost:<port>)
+Removed previously: Docnet.Core, System.Drawing.Common, Redis Output Cache.
 
-The AppHost starts:
-- apiservice (PDF processing API)
-- webfrontend (Blazor UI)
-- Redis (cache)
+## Quick Start
+```bash
+dotnet build
+dotnet run --project PdfEdit.AppHost
+```
+Browse to printed web endpoint (https://localhost:7xxx).
 
-## Manual Project Run (if not using AppHost)
-Run API and Web projects separately (not required if using AppHost).
+### Run Separately
+```bash
+cd PdfEdit.ApiService && dotnet run
+cd ../PdfEdit.Web && dotnet run
+```
+Adjust API base address in Program.cs if not using AppHost.
 
-## Usage
-1. Upload a PDF
-2. Add / edit form fields, text boxes, signatures
-3. Use Target button on a text element to visualize its center coordinates (overlay auto clears)
-4. Click Save to download processed PDF
+## Usage Walkthrough
+1. Upload a PDF.
+2. Fields panel populates; filter or edit values.
+3. Add text or signature elements; adjust numeric bounds (choose font family for text as needed).
+4. Use Locate to confirm coordinates or double-click page to move active element.
+5. Save to download merged & flattened PDF.
+6. Parse New to reset (releases signature blobs + session metadata).
 
-## Target Overlay Details
-- Drawn on current preview canvas
-- Two orthogonal dashed lines (width 3)
-- Concentric circles (r=5,7,10, width 3)
-- Auto-clears after ~2 seconds
+## Coordinate System
+- Units: PDF points (1/72 inch)
+- Inputs reflect raw PDF space (not device pixels)
+- pdf.js raster scale currently 1.0 (adjust in UpdatePreviewAsync if needed)
 
-## Development Notes
-- Text color now parsed from hex (supports #RGB and #RRGGBB)
-- Preview requests debounced (350ms)
-- 50 MB upload limit
+## Architecture
+```
+Blazor Server (UI + JS interop) --> Pdf API (iText7) --> Flattened PDF
+        | IndexedDB (client)           | in-memory docs
+```
 
-## API Endpoints
-- POST /api/pdf/upload
-- POST /api/pdf/process
-- DELETE /api/pdf/{id}
+## Data Lifecycle
+| Stage | Browser | Server | Notes |
+|-------|---------|--------|-------|
+| Upload | Original PDF blob (IDB) | Raw bytes (memory dict) | Id maps across |
+| Signatures | Blob (IDB, hashed) | Base64 per request | Ref counts manage cleanup |
+| Metadata | LocalStorage JSON | N/A | Restored on reload |
+| Output | Download only | Streamed once | Not retained |
+
+## Extensibility Ideas
+| Enhancement | Touch Points |
+|-------------|--------------|
+| Undo/Redo | State stack in Home.razor |
+| Server Thumbnails | Add page->PNG API + cache |
+| Auth | Add Identity / external provider |
+
+## Third-Party Components & Licenses
+| Component | License | Purpose |
+|-----------|---------|---------|
+| pdf.js | Apache 2.0 | Client PDF rendering |
+| iText7 Core | AGPL / Commercial | PDF manipulation |
+| iText7 BouncyCastle Adapter | AGPL | Crypto support |
+| SixLabors.ImageSharp | Apache 2.0 | Image handling |
+| Bootstrap | MIT | UI framework |
+| Bootstrap Icons | MIT | Icons |
+| .NET Runtime / ASP.NET Core | MIT | Framework |
+
+See LICENSE plus upstream licenses. When redistributing binaries under MIT + AGPL components you must comply with AGPL (publish corresponding source or obtain commercial iText license).
+
+## SBOM & OSS Compliance
+Generate a CycloneDX SBOM (example):
+```bash
+dotnet tool install --global CycloneDX
+cyclonedx dotnet --output sbom --json
+```
+Include resulting sbom.json in releases. Ensure:
+- LICENSE file included
+- This README (attribution section) retained
+- NOTICE (optional) summarizing third-party licenses (create if distributing binaries)
+
+## Contributing
+1. Fork & branch (feat/<name>)
+2. Keep PRs focused
+3. Run full manual workflow before submitting
 
 ## License
-MIT
+MIT © 2024-2025 vpatrinica & Contributors (see LICENSE). Some dependencies under different licenses (see above).

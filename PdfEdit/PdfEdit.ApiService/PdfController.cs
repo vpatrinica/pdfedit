@@ -20,14 +20,14 @@ public class PdfController : ControllerBase
         _logger = logger;
     }
 
-    [HttpPost("upload")]
-    public async Task<IActionResult> Upload(IFormFile file)
+    [HttpPost("parse")]
+    public async Task<IActionResult> Parse(IFormFile file)
     {
         try
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest("No file uploaded");
+                return BadRequest("No file parsed");
             }
 
             if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
@@ -47,7 +47,7 @@ public class PdfController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error uploading PDF file: {FileName}", file?.FileName);
+            _logger.LogError(ex, "Error parsing PDF file: {FileName}", file?.FileName);
             return StatusCode(500, "An error occurred while processing the file");
         }
     }
